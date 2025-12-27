@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kaldun/go-rate-limiting/middleware"
-	"github.com/kaldun/go-rate-limiting/ratelimiter"
-	"github.com/kaldun/go-rate-limiting/storage"
+	"github.com/kaldun-tech/go-rate-limiting/middleware"
+	"github.com/kaldun-tech/go-rate-limiting/ratelimiter"
+	"github.com/kaldun-tech/go-rate-limiting/storage"
 	"github.com/redis/go-redis/v9"
 )
 

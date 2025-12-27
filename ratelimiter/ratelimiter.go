@@ -6,6 +6,18 @@ import (
 )
 
 // RateLimiter defines the interface that all rate limiting algorithms must implement
+//
+// Key concept: The "key" parameter identifies WHO is being rate limited.
+// Each unique key gets its own independent rate limit state.
+//
+// Common key patterns:
+//   - User-based:  "user:alice", "user:bob"
+//   - API key:     "api_key:abc123"
+//   - IP-based:    "ip:192.168.1.1"
+//   - Combined:    "api_key:abc123:endpoint:/create"
+//
+// Each key maintains separate state, so different users/IPs/API keys
+// don't interfere with each other's rate limits.
 type RateLimiter interface {
 	// Allow checks if a request should be allowed for the given key
 	// Returns true if allowed, false if rate limit exceeded

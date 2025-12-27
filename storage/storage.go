@@ -7,6 +7,10 @@ import (
 
 // Storage defines the interface for storing rate limit state
 // Implementations can use Redis, in-memory cache, or other backends
+//
+// Note: Storage is a generic key-value store. Rate limiters compose keys
+// from the user-provided key (e.g., "user:alice") plus algorithm-specific
+// suffixes (e.g., "user:alice:tokens", "user:alice:last_refill").
 type Storage interface {
 	// Get retrieves a value from storage
 	Get(ctx context.Context, key string) (string, error)

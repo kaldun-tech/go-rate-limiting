@@ -22,7 +22,7 @@ A flexible and efficient rate limiting library for Go with support for multiple 
 ## Installation
 
 ```bash
-go get github.com/kaldun/go-rate-limiting
+go get github.com/kaldun-tech/go-rate-limiting
 ```
 
 ## Quick Start
@@ -36,8 +36,8 @@ import (
     "context"
     "time"
 
-    "github.com/kaldun/go-rate-limiting/ratelimiter"
-    "github.com/kaldun/go-rate-limiting/storage"
+    "github.com/kaldun-tech/go-rate-limiting/ratelimiter"
+    "github.com/kaldun-tech/go-rate-limiting/storage"
 )
 
 func main() {
@@ -87,12 +87,33 @@ defer store.Close()
 limiter := ratelimiter.NewFixedWindow(store, config)
 ```
 
+### Understanding Keys
+
+**The "key" identifies WHO is being rate limited.** Each unique key gets its own independent rate limit state.
+
+```go
+// Different users have separate rate limits
+limiter.Allow(ctx, "user:alice")  // Alice gets 10 req/sec
+limiter.Allow(ctx, "user:bob")    // Bob also gets 10 req/sec (independent)
+
+// Different key types
+limiter.Allow(ctx, "api_key:abc123")     // API key-based
+limiter.Allow(ctx, "ip:192.168.1.1")     // IP-based
+limiter.Allow(ctx, "user:alice:endpoint:/create")  // Combined key
+```
+
+**Storage per key (Token Bucket example):**
+- `"user:alice:tokens"` → `"8.5"` (current tokens)
+- `"user:alice:last_refill"` → `"1735228800"` (Unix timestamp)
+
+Each key maintains completely independent state - users don't share buckets!
+
 ### HTTP Middleware
 
 ```go
 import (
     "net/http"
-    "github.com/kaldun/go-rate-limiting/middleware"
+    "github.com/kaldun-tech/go-rate-limiting/middleware"
 )
 
 // Create middleware

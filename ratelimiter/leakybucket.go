@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kaldun/go-rate-limiting/storage"
+	"github.com/kaldun-tech/go-rate-limiting/storage"
 )
 
 // LeakyBucket implements the leaky bucket algorithm

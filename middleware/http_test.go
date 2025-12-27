@@ -1,13 +1,12 @@
 package middleware
 
 import (
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/kaldun/go-rate-limiting/ratelimiter"
-	"github.com/kaldun/go-rate-limiting/storage"
+	"github.com/kaldun-tech/go-rate-limiting/ratelimiter"
+	"github.com/kaldun-tech/go-rate-limiting/storage"
 )
 
 // TestRateLimitMiddleware tests the HTTP middleware

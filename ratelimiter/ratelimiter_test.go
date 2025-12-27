@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaldun/go-rate-limiting/storage"
+	"github.com/kaldun-tech/go-rate-limiting/storage"
 )
 
 // TestTokenBucket tests the token bucket algorithm

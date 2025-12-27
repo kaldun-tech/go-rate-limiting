@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -53,40 +54,104 @@ func (m *MemoryStorage) cleanupExpired() {
 
 // Get retrieves a value from memory
 func (m *MemoryStorage) Get(ctx context.Context, key string) (string, error) {
-	// TODO: Implement Get with expiry check
-	return "", fmt.Errorf("not implemented")
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	data, ok := m.data[key]
+	if !ok {
+		return "", fmt.Errorf("key not found")
+	}
+
+	// Check whether expiry is set and in the past
+	if expiry, ok := m.expiry[key]; ok {
+		if time.Now().After(expiry) {
+			return "", fmt.Errorf("Entry expired at %v", expiry)
+		}
+	}
+	// Data found
+	return data, nil
 }
 
 // Set stores a value in memory with optional expiration
 func (m *MemoryStorage) Set(ctx context.Context, key string, value string, expiration time.Duration) error {
-	// TODO: Implement Set
-	// If expiration > 0, set expiry time in m.expiry map
-	return fmt.Errorf("not implemented")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.data[key] = value
+
+	// Set expiration if specified
+	if 0 < expiration {
+		m.expiry[key] = time.Now().Add(expiration)
+	}
+	return nil
 }
 
 // Increment atomically increments a counter in memory
 func (m *MemoryStorage) Increment(ctx context.Context, key string) (int64, error) {
-	// TODO: Implement Increment
-	// Parse current value as int64, increment, store back
-	return 0, fmt.Errorf("not implemented")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Parse current value as int64
+	var current int64 = 0
+	if s, ok := m.data[key]; ok {
+		var err error
+		current, err = strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// Increment and store as string
+	current++
+	m.data[key] = strconv.FormatInt(current, 10)
+	return current, nil
 }
 
 // IncrementBy atomically increments a counter by n in memory
 func (m *MemoryStorage) IncrementBy(ctx context.Context, key string, n int64) (int64, error) {
-	// TODO: Implement IncrementBy
-	return 0, fmt.Errorf("not implemented")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Parse current value as int64
+	var current int64 = 0
+	if s, ok := m.data[key]; ok {
+		var err error
+		current, err = strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// Increment and store as string
+	current += n
+	m.data[key] = strconv.FormatInt(current, 10)
+	return current, nil
 }
 
 // Delete removes a key from memory
 func (m *MemoryStorage) Delete(ctx context.Context, key string) error {
-	// TODO: Implement Delete
-	return fmt.Errorf("not implemented")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Remove data, expiration, and sortedSets if present
+	delete(m.data, key)
+	delete(m.expiry, key)
+	delete(m.sortedSets, key)
+	return nil
 }
 
 // Expire sets an expiration on a key in memory
+// Strict behavior: error if key doesn't exist
 func (m *MemoryStorage) Expire(ctx context.Context, key string, expiration time.Duration) error {
-	// TODO: Implement Expire
-	return fmt.Errorf("not implemented")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.data[key]; !ok {
+		return fmt.Errorf("key does not exist")
+	}
+
+	m.expiry[key] = time.Now().Add(expiration)
+	return nil
 }
 
 // GetMultiple retrieves multiple values from memory

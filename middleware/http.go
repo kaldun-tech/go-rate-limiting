@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/kaldun/go-rate-limiting/ratelimiter"
+	"github.com/kaldun-tech/go-rate-limiting/ratelimiter"
 )
 
 // KeyExtractor is a function that extracts the rate limiting key from a request
@@ -18,16 +18,16 @@ type KeyExtractor func(r *http.Request) string
 
 // RateLimitMiddleware creates HTTP middleware for rate limiting
 type RateLimitMiddleware struct {
-	limiter      ratelimiter.RateLimiter
-	keyExtractor KeyExtractor
+	limiter         ratelimiter.RateLimiter
+	keyExtractor    KeyExtractor
 	onLimitExceeded func(w http.ResponseWriter, r *http.Request)
 }
 
 // NewRateLimitMiddleware creates a new rate limiting middleware
 func NewRateLimitMiddleware(limiter ratelimiter.RateLimiter, keyExtractor KeyExtractor) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
-		limiter:      limiter,
-		keyExtractor: keyExtractor,
+		limiter:         limiter,
+		keyExtractor:    keyExtractor,
 		onLimitExceeded: defaultOnLimitExceeded,
 	}
 }
