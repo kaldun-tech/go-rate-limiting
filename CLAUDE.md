@@ -4,227 +4,290 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rate limiting system implementation in Go with Redis support. This is a learning exercise focused on implementing distributed rate limiting algorithms and understanding system design trade-offs at scale.
+**Token Bucket Rate Limiter** - A clean, interview-ready implementation of the token bucket algorithm in Go.
+
+**Purpose**: Interview preparation for technical coding challenges. Demonstrates understanding of:
+- Rate limiting algorithms (token bucket)
+- Concurrent programming (mutex, thread safety)
+- Clean API design (Allow, AllowN, AllowWithInfo)
+- System design concepts
+
+**Focus**: This is a **single-server, in-memory implementation**. Not production-distributed systems code.
+
+## Key Design Decisions
+
+### Simplified Architecture (Option B)
+
+This implementation uses:
+- **In-memory storage**: `map[string]*bucket` with `sync.Mutex`
+- **No external dependencies**: No Redis, no storage abstraction layer
+- **No context.Context**: Simpler API for interview setting
+- **No error returns**: In-memory operations don't fail
+
+**Why this approach?**
+- Interview-friendly: Focus on algorithm, not infrastructure
+- Easy to explain and code on whiteboard/CoderPad
+- Shows clean Go idioms without over-engineering
+
+### What We're NOT Building
+
+- ❌ Distributed rate limiting (Redis/multi-server)
+- ❌ Multiple algorithms (Fixed Window, Sliding Window, Leaky Bucket)
+- ❌ HTTP middleware layer
+- ❌ Storage abstraction interfaces
+
+**These are valuable for production**, but add complexity that obscures the core algorithm in an interview setting.
+
+## Implementation Details
+
+### Token Bucket Algorithm
+
+```go
+type TokenBucket struct {
+    mu        sync.Mutex
+    buckets   map[string]*bucket  // key -> bucket state
+    rate      int                 // tokens per window
+    burstSize int                 // max tokens in bucket
+    window    time.Duration       // time window for rate
+}
+
+type bucket struct {
+    tokens     float64    // current tokens (can be fractional)
+    lastRefill time.Time  // last refill timestamp
+}
+```
+
+**Key implementation notes:**
+
+1. **Tokens are float64**: Because refill can produce fractional tokens
+   - Example: 10 tokens/min = 0.167 tokens/sec
+   - After 5.5 seconds: 0.9185 tokens added
+
+2. **Requests (n) are int**: Because you can't make 2.5 requests
+   - Clean API: `AllowN(key, 5)` not `AllowN(key, 5.0)`
+
+3. **Refill calculation**:
+   ```go
+   refillRate = float64(rate) / window.Seconds()
+   tokensToAdd = refillRate * elapsed.Seconds()
+   newTokens = math.Min(currentTokens + tokensToAdd, float64(burstSize))
+   ```
+
+4. **Allow delegates to AllowN**: DRY principle
+   ```go
+   func (tb *TokenBucket) Allow(key string) bool {
+       return tb.AllowN(key, 1)
+   }
+   ```
+
+5. **buildResult helper**: Reduces duplication between early returns and normal flow
+
+### Edge Cases to Handle
+
+1. **First request** (`!exists`):
+   - Create bucket with `burstSize - n` tokens
+   - Check `n <= burstSize` first (reject if requesting more than capacity)
+
+2. **Bucket empty** (`tokens < n`):
+   - Don't consume tokens
+   - Still update `lastRefill` to current time (important!)
+   - Calculate `RetryAfter` duration
+
+3. **Request exceeds capacity** (`n > burstSize`):
+   - Always deny (can never have enough tokens)
+
+4. **Zero or negative n**:
+   - Technically allowed (useful for checking state without consuming)
+
+### Thread Safety
+
+Uses `sync.Mutex` for thread safety:
+```go
+func (tb *TokenBucket) AllowN(key string, n int) bool {
+    tb.mu.Lock()
+    defer tb.mu.Unlock()
+    // ... implementation
+}
+```
+
+**Why mutex not RWMutex?**
+- Every call modifies state (updates `lastRefill` even on deny)
+- No pure read operations, so RWMutex provides no benefit
 
 ## Development Commands
 
 ### Running Examples
-- `go run examples/main.go` - Run example demonstrations of different algorithms
-- Redis must be running on `localhost:6379` for Redis examples
+```bash
+go run examples/main.go
+```
 
 ### Testing
-- `go test ./...` - Run all tests
-- `go test -v ./...` - Run tests with verbose output
-- `go test -run TestTokenBucket ./ratelimiter` - Run specific test
-- `go test -bench=. ./...` - Run benchmarks
-- `go test -bench=BenchmarkTokenBucket ./ratelimiter` - Run specific benchmark
+```bash
+go test ./...                         # All tests
+go test -v ./ratelimiter             # Verbose output
+go test -run TestTokenBucket ./ratelimiter  # Specific test
+go test -bench=. ./ratelimiter       # Benchmarks
+```
 
 ### Code Quality
-- `go fmt ./...` - Format code
-- `go vet ./...` - Run static analysis
-- `go mod tidy` - Clean up dependencies
-
-## Architecture
-
-### Package Structure
-
-```
-ratelimiter/     - Core rate limiting algorithms (Token Bucket, Fixed Window, Sliding Window, Leaky Bucket)
-storage/         - Storage abstraction layer (Redis, in-memory)
-middleware/      - HTTP middleware for easy integration
-examples/        - Usage examples and demonstrations
+```bash
+go fmt ./...    # Format code
+go vet ./...    # Static analysis
+go mod tidy     # Clean dependencies
 ```
 
-### Rate Limiting Algorithms
+## Interview Strategy
 
-The project implements four algorithms, each with different trade-offs:
+### How to Approach This in an Interview
 
-#### Token Bucket (Recommended)
-- **Memory**: O(1) - stores only current tokens + last refill time
-- **Performance**: O(1) operations
-- **Allows bursts**: Up to bucket capacity
-- **Best for**: Most APIs, allows reasonable traffic spikes
-- **Implementation notes**:
-  - Tokens refill at constant rate (Rate/Window)
-  - Bucket capacity = BurstSize (defaults to Rate)
-  - Each request consumes 1 token (or N for AllowN)
+1. **Start with signature**:
+   ```go
+   func (tb *TokenBucket) AllowN(key string, n int) bool
+   ```
 
-#### Fixed Window Counter
-- **Memory**: O(1) - single counter per window
-- **Performance**: O(1) - simple INCR operation
-- **Boundary problem**: Can allow 2x rate at window boundaries
-- **Best for**: Simple limits where small inaccuracies acceptable
-- **Implementation notes**:
-  - Window key includes timestamp: `key:window:1234567890`
-  - Use Redis INCR + EXPIRE for atomic operations
-  - Counter resets at fixed intervals
+2. **Explain the data structure**:
+   - "Each key gets its own bucket with tokens and lastRefill time"
+   - "Tokens refill continuously based on elapsed time"
 
-#### Sliding Window Log
-- **Memory**: O(N) - stores timestamp for every request
-- **Performance**: O(N) - must scan/remove old timestamps
-- **Most accurate**: True sliding window, no boundary issues
-- **Best for**: When accuracy is critical
-- **Implementation notes**:
-  - Use Redis Sorted Set (ZSET) with timestamp as score
-  - ZREMRANGEBYSCORE to remove old entries
-  - ZCARD to count current requests
-  - 50x more memory than Token Bucket
+3. **Walk through algorithm**:
+   - Calculate elapsed time since last refill
+   - Calculate tokens to add (refillRate * elapsed)
+   - Cap at burstSize
+   - Check if enough tokens, consume if yes
 
-#### Leaky Bucket
-- **Memory**: O(1) - queue size + last leak time
-- **Performance**: O(1) operations
-- **Smooths bursts**: Enforces constant rate
-- **Best for**: Protecting downstream services, traffic shaping
-- **Implementation notes**:
-  - Requests drain from queue at constant rate
-  - New requests rejected if queue full
-  - Calculate leaked requests based on elapsed time
+4. **Implement, explaining as you go**
 
-### Storage Layer Design
+5. **Test with examples**:
+   - First request (bucket creation)
+   - Burst (drain bucket)
+   - Refill (wait and retry)
+   - Exceeding capacity
 
-**Storage Interface**: Abstraction that supports both Redis and in-memory backends
+6. **Discuss extensions** (if time):
+   - `AllowWithInfo` for HTTP headers
+   - Distributed version with Redis
+   - Alternative algorithms (Fixed Window, Sliding Window)
 
-Key operations needed:
-- `Get/Set` - Basic key-value operations
-- `Increment/IncrementBy` - Atomic counters (for Fixed Window)
-- `Delete/Expire` - Cleanup and TTL
-- `ZAdd/ZRemRangeByScore/ZCount` - Sorted sets (for Sliding Window)
-- `Eval` - Lua scripts (for atomic multi-step operations)
+### Common Interview Questions
 
-**Redis Implementation**:
-- Used for distributed systems (multiple API servers)
-- Atomic operations prevent race conditions
-- Lua scripts ensure atomicity across multiple operations
-- Sharding strategy: hash(user_id) % num_shards
+**Q: "How would this work with multiple servers?"**
+A: "Current implementation is single-server. For distributed, I'd use Redis with Lua scripts for atomic operations. The algorithm is the same, but storage becomes shared state."
 
-**Memory Implementation**:
-- Good for single server or testing
-- Uses sync.RWMutex for thread safety
-- Background goroutine cleans expired keys
-- NOT suitable for distributed deployments
+**Q: "What if the system clock changes?"**
+A: "Good catch! Production systems use monotonic time or Redis TIME command for consistency. For this implementation, we accept system clock as-is since time-travel isn't a realistic threat in the interview context."
 
-### HTTP Middleware Design
+**Q: "Why not use a goroutine to refill tokens?"**
+A: "Lazy refill is more efficient - we only calculate refill when needed, not continuously. Saves CPU and avoids timing issues."
 
-**Key Extraction Strategies**:
-- `ExtractAPIKey` - Best for authenticated APIs (unique per client)
-- `ExtractIPAddress` - Fallback for unauthenticated endpoints (can be spoofed/shared)
-- `ExtractUserID` - For per-user limits (requires auth middleware)
-- `CombineExtractors` - Compound keys like "api_key:abc:endpoint:/create"
+**Q: "How do you handle different cost per request?"**
+A: "`AllowN(key, n)` - some operations cost more tokens. Like 1 for reads, 10 for writes, 100 for AI inference."
 
-**Standard Headers Set**:
-- `X-RateLimit-Limit` - Maximum requests allowed
-- `X-RateLimit-Remaining` - Requests remaining in window
-- `X-RateLimit-Reset` - When limit resets (Unix timestamp)
-- `Retry-After` - Seconds to wait (when limit exceeded)
-- HTTP 429 status code when rate limited
+**Q: "What about memory cleanup?"**
+A: "Could add TTL/LRU eviction for unused keys. In practice, most systems have bounded user sets. For interview, this is acceptable unless explicitly asked."
 
-### Distributed System Considerations
+## Testing Strategy
 
-**Architecture at Scale**:
+**What to test:**
+
+1. ✅ Basic allow/deny
+2. ✅ Burst handling (initial full bucket)
+3. ✅ Refill over time
+4. ✅ AllowN with different costs
+5. ✅ Edge case: n > burstSize
+6. ✅ Edge case: first request for key
+7. ✅ Thread safety (concurrent access)
+8. ✅ Result fields accuracy (Remaining, RetryAfter, ResetAt)
+
+**Example test structure:**
+```go
+func TestTokenBucket_BasicAllow(t *testing.T) {
+    limiter := NewTokenBucket(10, time.Second, 0)
+
+    // First 10 should succeed
+    for i := 0; i < 10; i++ {
+        if !limiter.Allow("user1") {
+            t.Errorf("Request %d should be allowed", i)
+        }
+    }
+
+    // 11th should fail
+    if limiter.Allow("user1") {
+        t.Error("Request 11 should be denied")
+    }
+}
+```
+
+## Real-World Context (Discussion Points)
+
+While this implementation is interview-focused, here's how production systems extend it:
+
+### Distributed Systems
+
 ```
 [Load Balancer]
     ↓
-[API Gateway Cluster] (stateless, auto-scaling)
+[API Gateway Cluster] (multiple instances)
     ↓
-[Redis Cluster] (sharded by user ID)
-    ↓
-[Backend Services]
+[Redis Cluster] (shared state)
 ```
 
-**Race Condition Prevention**:
-- Multiple API gateway instances may check same user's limit simultaneously
-- Use Redis atomic operations (INCR, Lua scripts)
-- Lua scripts execute atomically - all operations in one transaction
+**Changes needed:**
+- Replace `map[string]*bucket` with Redis
+- Use Lua scripts for atomic refill+consume
+- Use Redis TIME command for consistent timestamps
+- Handle Redis failures (fail open vs. fail closed)
 
-**Failure Modes**:
-- Redis unavailable: Fail open (allow) vs fail closed (reject)
-- Network partition: Local fallback with conservative limits
-- Redis shard down: Failover via Redis Sentinel/Cluster
+### HTTP Integration
 
-**Performance Optimizations**:
-- Local caching: Check memory cache before Redis
-- Batch operations: Group multiple checks (for async workloads)
-- Approximate counting: Count-Min Sketch for less critical limits
+```go
+func RateLimitMiddleware(limiter *TokenBucket) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            key := extractKey(r) // From API key, IP, user ID, etc.
 
-### Algorithm Selection Guide
+            result := limiter.AllowWithInfo(key, 1)
 
-**Choose Token Bucket when**:
-- Building a typical REST API
-- Want to allow reasonable bursts
-- Need good performance (O(1))
-- Memory efficiency matters
+            // Set headers
+            w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
+            w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
 
-**Choose Fixed Window when**:
-- Simplicity is priority
-- Small boundary inaccuracies acceptable
-- Need absolute best performance
-- Easy debugging/monitoring needed
+            if !result.Allowed {
+                w.Header().Set("Retry-After", strconv.Itoa(int(result.RetryAfter.Seconds())))
+                http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+                return
+            }
 
-**Choose Sliding Window when**:
-- Accuracy is critical (financial, security)
-- Can afford memory cost
-- No burst allowance acceptable
-- Willing to accept O(N) performance
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
 
-**Choose Leaky Bucket when**:
-- Protecting downstream services
-- Need to smooth traffic
-- Constant rate more important than bursts
-- Traffic shaping is the goal
+## Common Pitfalls to Avoid
 
-## Implementation Notes
+1. **Not updating lastRefill on deny**: Must update even when denying to track refill time correctly
 
-### TODO Items
+2. **Integer division**: `rate / window` loses precision - use `float64(rate) / window.Seconds()`
 
-Core implementations left as exercises (marked with TODO comments):
+3. **Forgetting to cap at burstSize**: Tokens can't exceed bucket capacity
 
-1. **Algorithm implementations** (`ratelimiter/*.go`):
-   - Implement `Allow()`, `AllowN()`, `AllowWithInfo()` methods
-   - Calculate token refills, window boundaries, timestamps
-   - Return detailed Result objects with remaining/retry info
+4. **Race conditions**: All bucket access must be under mutex
 
-2. **Storage backends** (`storage/*.go`):
-   - Redis: Implement all operations using go-redis client
-   - Memory: Implement with proper mutex locking and expiry
-   - Handle errors and edge cases
+5. **Not handling n > burstSize**: Should always deny if requesting more than capacity
 
-3. **HTTP Middleware** (`middleware/http.go`):
-   - Extract keys from requests
-   - Check rate limits
-   - Set appropriate headers
-   - Handle limit exceeded responses
+## What Makes This Interview-Ready?
 
-4. **Tests** (`*_test.go`):
-   - Unit tests for each algorithm
-   - Storage backend tests
-   - Middleware integration tests
-   - Benchmarks for performance comparison
+✅ **Clear structure**: Easy to explain and code step-by-step
+✅ **Good defaults**: `burstSize=0` → defaults to rate
+✅ **Progressive implementation**: Allow → AllowN → AllowWithInfo
+✅ **Real-world applicability**: Actually used by Stripe, GitHub, AWS
+✅ **Extension points**: Natural segue to distributed systems discussion
+✅ **Clean Go idioms**: Mutex, defer, pointer receivers, zero values
 
-### Key Questions Answered
-
-**Where does rate limiting happen?**
-- API Gateway layer (recommended) - protects backend, centralized control
-- Can also implement at application layer for per-resource limits
-
-**What's the limiting key?**
-- API key for authenticated requests (best, unique per client)
-- IP address as fallback (can be shared/spoofed)
-- Consider combining factors for stricter control
-
-**How to handle distributed systems?**
-- Redis provides shared state across gateway instances
-- Use atomic operations (INCR, Lua scripts) to prevent race conditions
-- Shard Redis by user ID for horizontal scaling
-
-**What happens when limit exceeded?**
-- Return HTTP 429 Too Many Requests
-- Set Retry-After header
-- For background jobs: queuing makes sense
-- For real-time APIs: reject immediately
-
-### Common Pitfalls
-
-- **Clock skew**: Use Redis TIME command for consistent timestamps across servers
-- **Race conditions**: Always use atomic operations, never read-modify-write
-- **Memory leaks**: Ensure old data is cleaned up (EXPIRE, sorted set trimming)
-- **Testing**: Don't rely on time.Sleep for timing-sensitive tests - use mocking
+This shows you can:
+- Implement algorithms correctly
+- Write clean, maintainable code
+- Think about edge cases
+- Design good APIs
+- Understand concurrency
+- Discuss system design trade-offs

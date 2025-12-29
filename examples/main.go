@@ -1,138 +1,143 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"net/http"
+	"strings"
 	"time"
 
-	"github.com/kaldun-tech/go-rate-limiting/middleware"
 	"github.com/kaldun-tech/go-rate-limiting/ratelimiter"
-	"github.com/kaldun-tech/go-rate-limiting/storage"
-	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	// Example 1: In-memory rate limiter (single server)
-	fmt.Println("Example 1: In-memory rate limiter")
-	exampleInMemory()
+	// Example 1: Basic token bucket
+	fmt.Println("Example 1: Basic Token Bucket (10 req/sec)")
+	exampleBasic()
 
-	// Example 2: Redis rate limiter (distributed)
-	fmt.Println("\nExample 2: Redis rate limiter")
-	exampleRedis()
+	fmt.Println("\n" + strings.Repeat("=", 50))
 
-	// Example 3: HTTP middleware
-	fmt.Println("\nExample 3: HTTP middleware")
-	exampleHTTPMiddleware()
+	// Example 2: With burst capacity
+	fmt.Println("\nExample 2: Token Bucket with Burst (5 req/sec, burst 10)")
+	exampleWithBurst()
+
+	fmt.Println("\n" + strings.Repeat("=", 50))
+
+	// Example 3: Detailed info
+	fmt.Println("\nExample 3: AllowWithInfo - Detailed Rate Limit Information")
+	exampleWithInfo()
+
+	fmt.Println("\n" + strings.Repeat("=", 50))
+
+	// Example 4: AllowN for batch operations
+	fmt.Println("\nExample 4: AllowN - Batch Operations")
+	exampleAllowN()
 }
 
-func exampleInMemory() {
-	// Create in-memory storage
-	store := storage.NewMemoryStorage()
-	defer store.Close()
+func exampleBasic() {
+	// Create token bucket: 10 requests per second
+	limiter := ratelimiter.NewTokenBucket(10, time.Second, 0) // burst defaults to rate
 
-	// Create token bucket rate limiter: 10 requests per second with burst of 20
-	config := ratelimiter.Config{
-		Rate:      10,
-		Window:    time.Second,
-		BurstSize: 20,
-	}
-	limiter := ratelimiter.NewTokenBucket(store, config)
+	// Simulate requests from a user
+	key := "user:alice"
 
-	// Test rate limiting
-	ctx := context.Background()
-	key := "user:123"
-
-	// Simulate requests
-	for i := 0; i < 15; i++ {
-		allowed, err := limiter.Allow(ctx, key)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
-
+	// First 10 requests should succeed (bucket starts full)
+	for i := 1; i <= 12; i++ {
+		allowed := limiter.Allow(key)
 		if allowed {
-			fmt.Printf("Request %d: ALLOWED\n", i+1)
+			fmt.Printf("Request %2d: ✓ ALLOWED\n", i)
 		} else {
-			fmt.Printf("Request %d: RATE LIMITED\n", i+1)
+			fmt.Printf("Request %2d: ✗ RATE LIMITED\n", i)
 		}
-
-		time.Sleep(50 * time.Millisecond)
 	}
-}
 
-func exampleRedis() {
-	// Create Redis storage
-	store, err := storage.NewRedisStorage(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password
-		DB:       0,  // default DB
-	})
-	if err != nil {
-		log.Printf("Failed to connect to Redis (is it running?): %v", err)
-		log.Println("Skipping Redis example...")
-		return
-	}
-	defer store.Close()
+	// Wait a bit and try again
+	fmt.Println("\nWaiting 500ms (should refill ~5 tokens)...")
+	time.Sleep(500 * time.Millisecond)
 
-	// Create fixed window rate limiter: 100 requests per minute
-	config := ratelimiter.Config{
-		Rate:   100,
-		Window: time.Minute,
-	}
-	limiter := ratelimiter.NewFixedWindow(store, config)
-
-	// Test rate limiting
-	ctx := context.Background()
-	key := "user:456"
-
-	// Simulate requests
-	for i := 0; i < 5; i++ {
-		allowed, err := limiter.Allow(ctx, key)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			continue
-		}
-
+	for i := 13; i <= 16; i++ {
+		allowed := limiter.Allow(key)
 		if allowed {
-			fmt.Printf("Request %d: ALLOWED\n", i+1)
+			fmt.Printf("Request %2d: ✓ ALLOWED\n", i)
 		} else {
-			fmt.Printf("Request %d: RATE LIMITED\n", i+1)
+			fmt.Printf("Request %2d: ✗ RATE LIMITED\n", i)
 		}
 	}
 }
 
-func exampleHTTPMiddleware() {
-	// Create in-memory storage
-	store := storage.NewMemoryStorage()
+func exampleWithBurst() {
+	// Allow bursts up to 10, but only 5 per second sustained
+	limiter := ratelimiter.NewTokenBucket(5, time.Second, 10)
 
-	// Create rate limiter: 5 requests per 10 seconds
-	config := ratelimiter.Config{
-		Rate:   5,
-		Window: 10 * time.Second,
+	key := "user:bob"
+
+	// Can handle initial burst of 10
+	fmt.Println("Initial burst of 10 requests:")
+	for i := 1; i <= 12; i++ {
+		allowed := limiter.Allow(key)
+		if allowed {
+			fmt.Printf("Request %2d: ✓ ALLOWED\n", i)
+		} else {
+			fmt.Printf("Request %2d: ✗ RATE LIMITED\n", i)
+		}
 	}
-	limiter := ratelimiter.NewTokenBucket(store, config)
+}
 
-	// Create middleware with IP-based rate limiting
-	rateLimitMW := middleware.NewRateLimitMiddleware(
-		limiter,
-		middleware.ExtractIPAddress,
-	)
+func exampleWithInfo() {
+	limiter := ratelimiter.NewTokenBucket(10, time.Second, 15)
 
-	// Create a simple handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Hello! This endpoint is rate limited.\n")
-	})
+	key := "user:charlie"
 
-	// Wrap handler with rate limiting middleware
-	http.Handle("/api/hello", rateLimitMW.Middleware(handler))
+	// Make some requests
+	for i := 1; i <= 3; i++ {
+		result := limiter.AllowWithInfo(key, 1)
+		fmt.Printf("Request %d:\n", i)
+		fmt.Printf("  Allowed: %v\n", result.Allowed)
+		fmt.Printf("  Remaining: %d tokens\n", result.Remaining)
+		fmt.Printf("  Reset in: %v\n", time.Until(result.ResetAt).Round(time.Millisecond))
+		if !result.Allowed {
+			fmt.Printf("  Retry after: %v\n", result.RetryAfter)
+		}
+		fmt.Println()
+	}
 
-	// Start server
-	fmt.Println("Starting server on :8080")
-	fmt.Println("Try: curl http://localhost:8080/api/hello")
-	fmt.Println("Make multiple requests to see rate limiting in action")
+	// Drain the bucket
+	fmt.Println("Draining bucket...")
+	for limiter.Allow(key) {
+		// Keep draining
+	}
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Now check what info we get
+	result := limiter.AllowWithInfo(key, 1)
+	fmt.Println("After draining:")
+	fmt.Printf("  Allowed: %v\n", result.Allowed)
+	fmt.Printf("  Remaining: %d tokens\n", result.Remaining)
+	fmt.Printf("  Retry after: %v\n", result.RetryAfter.Round(time.Millisecond))
+	fmt.Printf("  Reset at: %v (in %v)\n",
+		result.ResetAt.Format("15:04:05"),
+		time.Until(result.ResetAt).Round(time.Millisecond))
+}
+
+func exampleAllowN() {
+	limiter := ratelimiter.NewTokenBucket(100, time.Minute, 100)
+
+	key := "user:david"
+
+	// Normal request costs 1 token
+	allowed := limiter.AllowN(key, 1)
+	fmt.Printf("Single request (1 token): %v\n", allowed)
+
+	// Batch upload costs 10 tokens
+	allowed = limiter.AllowN(key, 10)
+	fmt.Printf("Batch upload (10 tokens): %v\n", allowed)
+
+	// Expensive operation costs 50 tokens
+	allowed = limiter.AllowN(key, 50)
+	fmt.Printf("Expensive operation (50 tokens): %v\n", allowed)
+
+	// Check remaining
+	result := limiter.AllowWithInfo(key, 0) // 0 tokens = just check, don't consume
+	fmt.Printf("Remaining tokens: %d\n", result.Remaining)
+
+	// Try another expensive operation (should fail - only ~39 tokens left)
+	allowed = limiter.AllowN(key, 50)
+	fmt.Printf("Another expensive operation (50 tokens): %v\n", allowed)
 }

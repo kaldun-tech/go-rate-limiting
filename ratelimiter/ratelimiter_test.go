@@ -1,188 +1,265 @@
 package ratelimiter
 
 import (
-	"context"
+	"sync"
 	"testing"
 	"time"
-
-	"github.com/kaldun-tech/go-rate-limiting/storage"
 )
 
-// TestTokenBucket tests the token bucket algorithm
-func TestTokenBucket(t *testing.T) {
-	store := storage.NewMemoryStorage()
-	defer store.Close()
+func TestTokenBucket_Allow(t *testing.T) {
+	limiter := NewTokenBucket(10, time.Second, 0)
+	key := "user:alice"
 
-	config := Config{
-		Rate:      10,
-		Window:    time.Second,
-		BurstSize: 10,
+	// First 10 requests should succeed (bucket starts full)
+	for i := 0; i < 10; i++ {
+		if !limiter.Allow(key) {
+			t.Errorf("Request %d should be allowed", i+1)
+		}
 	}
-	limiter := NewTokenBucket(store, config)
 
-	ctx := context.Background()
-	key := "test:user:1"
-
-	// TODO: Implement tests
-	// Test cases to cover:
-	// 1. Initial requests should be allowed (up to burst size)
-	// 2. Requests beyond rate limit should be denied
-	// 3. Tokens should refill over time
-	// 4. Burst handling works correctly
-	// 5. Multiple keys are independent
-
-	t.Run("initial requests allowed", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-		// Test that first N requests are allowed
-	})
-
-	t.Run("rate limit enforced", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-		// Test that requests beyond limit are denied
-	})
-
-	t.Run("tokens refill", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-		// Test that waiting allows more requests
-	})
-
-	_ = limiter
-	_ = key
+	// 11th request should fail (bucket empty)
+	if limiter.Allow(key) {
+		t.Error("Request 11 should be denied - bucket is empty")
+	}
 }
 
-// TestFixedWindow tests the fixed window algorithm
-func TestFixedWindow(t *testing.T) {
-	store := storage.NewMemoryStorage()
-	defer store.Close()
+func TestTokenBucket_AllowN(t *testing.T) {
+	limiter := NewTokenBucket(100, time.Minute, 100)
+	key := "user:bob"
 
-	config := Config{
-		Rate:   10,
-		Window: time.Second,
+	// Single request (1 token)
+	if !limiter.AllowN(key, 1) {
+		t.Error("Single request should be allowed")
 	}
-	limiter := NewFixedWindow(store, config)
 
-	ctx := context.Background()
-	key := "test:user:2"
+	// Batch operation (10 tokens)
+	if !limiter.AllowN(key, 10) {
+		t.Error("Batch request (10 tokens) should be allowed")
+	}
 
-	// TODO: Implement tests
-	// Test cases to cover:
-	// 1. Requests within limit are allowed
-	// 2. Requests beyond limit are denied
-	// 3. Counter resets at window boundary
-	// 4. Window boundary burst problem
+	// Expensive operation (50 tokens)
+	if !limiter.AllowN(key, 50) {
+		t.Error("Expensive request (50 tokens) should be allowed")
+	}
 
-	t.Run("requests within limit", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
-
-	t.Run("requests beyond limit", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
-
-	t.Run("window reset", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
-
-	_ = limiter
-	_ = key
-	_ = ctx
+	// Check remaining: started with 100, used 1 + 10 + 50 = 61, should have 39 left
+	// Another expensive operation should fail
+	if limiter.AllowN(key, 50) {
+		t.Error("Second expensive request should be denied (only ~39 tokens remaining)")
+	}
 }
 
-// TestSlidingWindow tests the sliding window algorithm
-func TestSlidingWindow(t *testing.T) {
-	store := storage.NewMemoryStorage()
-	defer store.Close()
+func TestTokenBucket_ExceedsCapacity(t *testing.T) {
+	limiter := NewTokenBucket(10, time.Second, 10)
+	key := "user:charlie"
 
-	config := Config{
-		Rate:   10,
-		Window: time.Second,
+	// Request more than bucket capacity
+	if limiter.AllowN(key, 20) {
+		t.Error("Request exceeding bucket capacity should be denied")
 	}
-	limiter := NewSlidingWindow(store, config)
 
-	// TODO: Implement tests
-	// Test cases to cover:
-	// 1. Accurate counting within sliding window
-	// 2. Old requests are dropped from window
-	// 3. No burst problem at boundaries
-	// 4. Memory usage is proportional to request count
-
-	t.Run("accurate counting", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
-
-	t.Run("old requests dropped", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
-
-	_ = limiter
+	// Bucket should still be full for normal requests
+	if !limiter.Allow(key) {
+		t.Error("Normal request should still be allowed")
+	}
 }
 
-// TestLeakyBucket tests the leaky bucket algorithm
-func TestLeakyBucket(t *testing.T) {
-	store := storage.NewMemoryStorage()
-	defer store.Close()
+func TestTokenBucket_Refill(t *testing.T) {
+	// 10 tokens/second
+	limiter := NewTokenBucket(10, time.Second, 10)
+	key := "user:david"
 
-	config := Config{
-		Rate:   10,
-		Window: time.Second,
+	// Drain the bucket
+	for i := 0; i < 10; i++ {
+		limiter.Allow(key)
 	}
-	limiter := NewLeakyBucket(store, config)
 
-	// TODO: Implement tests
-	// Test cases to cover:
-	// 1. Queue processes at constant rate
-	// 2. Queue fills up and rejects new requests
-	// 3. Queue drains over time
-	// 4. Smooths bursts
+	// Should be denied now
+	if limiter.Allow(key) {
+		t.Error("Should be denied after draining bucket")
+	}
 
-	t.Run("constant processing rate", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
+	// Wait 500ms (should refill ~5 tokens)
+	time.Sleep(500 * time.Millisecond)
 
-	t.Run("queue capacity", func(t *testing.T) {
-		t.Skip("TODO: Implement test")
-	})
+	// Should be able to make a few more requests
+	allowed := 0
+	for i := 0; i < 10; i++ {
+		if limiter.Allow(key) {
+			allowed++
+		}
+	}
 
-	_ = limiter
+	// Should have gotten approximately 5 tokens back (±1 for timing variance)
+	if allowed < 4 || allowed > 6 {
+		t.Errorf("Expected ~5 tokens after 500ms, got %d", allowed)
+	}
 }
 
-// BenchmarkTokenBucket benchmarks the token bucket algorithm
-func BenchmarkTokenBucket(b *testing.B) {
-	store := storage.NewMemoryStorage()
-	defer store.Close()
+func TestTokenBucket_IndependentKeys(t *testing.T) {
+	limiter := NewTokenBucket(5, time.Second, 5)
 
-	config := Config{
-		Rate:      1000,
-		Window:    time.Second,
-		BurstSize: 1000,
+	// Drain Alice's bucket
+	for i := 0; i < 5; i++ {
+		limiter.Allow("user:alice")
 	}
-	limiter := NewTokenBucket(store, config)
 
-	ctx := context.Background()
+	// Alice should be denied
+	if limiter.Allow("user:alice") {
+		t.Error("Alice should be rate limited")
+	}
+
+	// Bob should still have full bucket (independent keys)
+	if !limiter.Allow("user:bob") {
+		t.Error("Bob should not be affected by Alice's rate limit")
+	}
+}
+
+func TestTokenBucket_AllowWithInfo(t *testing.T) {
+	limiter := NewTokenBucket(10, time.Second, 15)
+	key := "user:eve"
+
+	// First request
+	result := limiter.AllowWithInfo(key, 1)
+	if !result.Allowed {
+		t.Error("First request should be allowed")
+	}
+	if result.Remaining != 14 {
+		t.Errorf("Expected 14 remaining tokens, got %d", result.Remaining)
+	}
+
+	// Drain the bucket
+	for limiter.Allow(key) {
+		// Keep draining
+	}
+
+	// Check denied result
+	result = limiter.AllowWithInfo(key, 1)
+	if result.Allowed {
+		t.Error("Request should be denied when bucket is empty")
+	}
+	if result.Remaining != 0 {
+		t.Errorf("Expected 0 remaining tokens, got %d", result.Remaining)
+	}
+	if result.RetryAfter == 0 {
+		t.Error("RetryAfter should be set when denied")
+	}
+	if result.ResetAt.IsZero() {
+		t.Error("ResetAt should be set")
+	}
+}
+
+func TestTokenBucket_Burst(t *testing.T) {
+	// Rate: 5/sec, Burst: 10 (allows temporary spike)
+	limiter := NewTokenBucket(5, time.Second, 10)
+	key := "user:frank"
+
+	// Should handle burst of 10
+	for i := 0; i < 10; i++ {
+		if !limiter.Allow(key) {
+			t.Errorf("Burst request %d should be allowed (burst capacity = 10)", i+1)
+		}
+	}
+
+	// 11th should fail
+	if limiter.Allow(key) {
+		t.Error("Request beyond burst capacity should be denied")
+	}
+}
+
+func TestTokenBucket_Reset(t *testing.T) {
+	limiter := NewTokenBucket(5, time.Second, 5)
+	key := "user:grace"
+
+	// Drain bucket
+	for i := 0; i < 5; i++ {
+		limiter.Allow(key)
+	}
+
+	// Should be denied
+	if limiter.Allow(key) {
+		t.Error("Should be denied after draining")
+	}
+
+	// Reset
+	limiter.Reset(key)
+
+	// Should have full bucket again
+	if !limiter.Allow(key) {
+		t.Error("Should be allowed after reset")
+	}
+}
+
+func TestTokenBucket_ConcurrentAccess(t *testing.T) {
+	limiter := NewTokenBucket(100, time.Second, 100)
+	key := "user:concurrent"
+
+	var wg sync.WaitGroup
+	allowedCount := 0
+	var mu sync.Mutex
+
+	// Launch 150 concurrent requests (more than capacity)
+	for i := 0; i < 150; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if limiter.Allow(key) {
+				mu.Lock()
+				allowedCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Should have allowed exactly 100 (bucket capacity)
+	if allowedCount != 100 {
+		t.Errorf("Expected exactly 100 allowed requests, got %d", allowedCount)
+	}
+}
+
+func BenchmarkTokenBucket_Allow(b *testing.B) {
+	limiter := NewTokenBucket(1000000, time.Second, 1000000)
 	key := "bench:user:1"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = limiter.Allow(ctx, key)
+		limiter.Allow(key)
 	}
 }
 
-// BenchmarkFixedWindow benchmarks the fixed window algorithm
-func BenchmarkFixedWindow(b *testing.B) {
-	store := storage.NewMemoryStorage()
-	defer store.Close()
-
-	config := Config{
-		Rate:   1000,
-		Window: time.Second,
-	}
-	limiter := NewFixedWindow(store, config)
-
-	ctx := context.Background()
+func BenchmarkTokenBucket_AllowN(b *testing.B) {
+	limiter := NewTokenBucket(1000000, time.Second, 1000000)
 	key := "bench:user:2"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = limiter.Allow(ctx, key)
+		limiter.AllowN(key, 5)
 	}
+}
+
+func BenchmarkTokenBucket_AllowWithInfo(b *testing.B) {
+	limiter := NewTokenBucket(1000000, time.Second, 1000000)
+	key := "bench:user:3"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		limiter.AllowWithInfo(key, 1)
+	}
+}
+
+func BenchmarkTokenBucket_Concurrent(b *testing.B) {
+	limiter := NewTokenBucket(1000000, time.Second, 1000000)
+	keys := []string{"user:1", "user:2", "user:3", "user:4"}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			key := keys[i%len(keys)]
+			limiter.Allow(key)
+			i++
+		}
+	})
 }
