@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(git rm:*)",
-      "Bash(go fmt:*)"
+      "Bash(go fmt:*)",
+      "Bash(tree:*)",
+      "Bash(mkdir:*)",
+      "Bash(go test:*)"
     ]
   }
 }

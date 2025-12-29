@@ -1,339 +1,210 @@
-# Token Bucket Rate Limiter in Go
+# Go Algorithm Practice
 
-A clean, thread-safe implementation of the Token Bucket rate limiting algorithm in Go. Built as interview preparation to demonstrate understanding of:
-- Concurrent programming (mutex, thread safety)
-- Algorithm implementation (token bucket)
-- System design (rate limiting patterns)
-- Clean API design
+A collection of algorithm and data structure implementations in Go for interview preparation and skill development.
 
-## What is Token Bucket?
+## Structure
 
-The Token Bucket algorithm is one of the most popular rate limiting algorithms used by APIs like Stripe, GitHub, and AWS.
+```
+go-algorithm-practice/
+├── rate-limiting/          # Rate limiting algorithms
+│   └── token-bucket/      # Token bucket implementation (complete)
+├── data-structures/        # Common data structures
+│   ├── lru-cache.go       # LRU Cache (TODO)
+│   ├── bst.go             # Binary Search Tree (TODO)
+│   ├── trie.go            # Prefix Tree (TODO)
+│   ├── heap.go            # Min/Max Heap (TODO)
+│   └── linkedlist.go      # Linked List problems (TODO)
+├── algorithms/             # Algorithm patterns
+│   ├── graph.go           # Graph traversal (BFS, DFS, etc.) (TODO)
+│   ├── sorting.go         # Sorting algorithms (TODO)
+│   ├── dynamic-programming.go  # DP problems (TODO)
+│   ├── backtracking.go    # Backtracking patterns (TODO)
+│   └── two-pointers.go    # Two pointer techniques (TODO)
+└── examples/              # Usage examples
 
-**How it works:**
-1. A "bucket" holds tokens (starts full at `burstSize`)
-2. Tokens refill at a constant rate (`rate` tokens per `window`)
-3. Each request consumes tokens (usually 1 per request)
-4. Request allowed if enough tokens available
-5. Request rejected if bucket empty
-
-**Key feature:** Allows traffic bursts up to bucket capacity while maintaining average rate limit.
-
-## Installation
-
-```bash
-go get github.com/kaldun-tech/go-rate-limiting
 ```
 
-## Quick Start
+## What's Implemented
 
+### Rate Limiting - Token Bucket ✅
+
+A complete, production-ready implementation of the Token Bucket rate limiting algorithm used by Stripe, GitHub, and AWS.
+
+**Features:**
+- Thread-safe with `sync.Mutex`
+- Key-based rate limiting (per-user, per-API-key, per-IP)
+- Burst support
+- Detailed rate limit information for HTTP headers
+- Weighted costs (different operations cost different tokens)
+
+**Quick example:**
 ```go
-package main
+import tokenbucket "github.com/kaldun-tech/go-algorithm-practice/rate-limiting/token-bucket"
 
-import (
-    "fmt"
-    "time"
-    "github.com/kaldun-tech/go-rate-limiting/ratelimiter"
-)
+// Create limiter: 10 requests/second
+limiter := tokenbucket.NewTokenBucket(10, time.Second, 0)
 
-func main() {
-    // Create limiter: 10 requests/second, burst up to 10
-    limiter := ratelimiter.NewTokenBucket(10, time.Second, 0)
-
-    // Check if request is allowed
-    if limiter.Allow("user:alice") {
-        fmt.Println("Request allowed!")
-    } else {
-        fmt.Println("Rate limited - please slow down")
-    }
+// Check if request allowed
+if limiter.Allow("user:alice") {
+    fmt.Println("Request allowed!")
 }
 ```
 
-## API Reference
+See [rate-limiting/CLAUDE.md](rate-limiting/CLAUDE.md) for detailed implementation notes and interview tips.
 
-### Creating a Limiter
-
-```go
-func NewTokenBucket(rate int, window time.Duration, burstSize int) *TokenBucket
-```
-
-**Parameters:**
-- `rate`: Number of tokens added per window (e.g., 100)
-- `window`: Time window for rate (e.g., `time.Minute`)
-- `burstSize`: Maximum tokens in bucket (e.g., 150). Set to `0` to default to `rate`
-
-**Examples:**
-```go
-// 10 requests/second, burst=10
-limiter := ratelimiter.NewTokenBucket(10, time.Second, 0)
-
-// 100 requests/minute, burst=150 (allows temporary spike)
-limiter := ratelimiter.NewTokenBucket(100, time.Minute, 150)
-
-// 1000 requests/hour
-limiter := ratelimiter.NewTokenBucket(1000, time.Hour, 0)
-```
-
-### Checking Rate Limits
-
-#### Allow(key string) bool
-
-Check if a single request should be allowed.
-
-```go
-allowed := limiter.Allow("user:123")
-if !allowed {
-    // Return HTTP 429 Too Many Requests
-}
-```
-
-**The "key" identifies WHO is being rate limited:**
-- `"user:alice"` - Per-user rate limiting
-- `"api_key:abc123"` - Per API key
-- `"ip:192.168.1.1"` - Per IP address
-
-Each key maintains independent bucket state - users don't affect each other's limits!
-
-#### AllowN(key string, n int) bool
-
-Allow N tokens at once (for batch operations or weighted costs).
-
-```go
-// Normal request costs 1 token
-allowed := limiter.AllowN("user:123", 1)
-
-// Batch upload costs 10 tokens
-allowed = limiter.AllowN("user:123", 10)
-
-// Expensive AI query costs 50 tokens
-allowed = limiter.AllowN("user:123", 50)
-```
-
-#### AllowWithInfo(key string, n int) *Result
-
-Get detailed information about rate limit check.
-
-```go
-result := limiter.AllowWithInfo("user:123", 1)
-
-fmt.Printf("Allowed: %v\n", result.Allowed)
-fmt.Printf("Remaining: %d tokens\n", result.Remaining)
-fmt.Printf("Retry after: %v\n", result.RetryAfter)  // If denied
-fmt.Printf("Resets at: %v\n", result.ResetAt)
-```
-
-**Result fields:**
-```go
-type Result struct {
-    Allowed    bool          // Whether request was allowed
-    Remaining  int           // Tokens remaining in bucket
-    RetryAfter time.Duration // How long to wait if denied
-    ResetAt    time.Time     // When bucket refills to full
-}
-```
-
-Use this to set HTTP headers:
-```go
-result := limiter.AllowWithInfo(apiKey, 1)
-w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
-w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
-if !result.Allowed {
-    w.Header().Set("Retry-After", strconv.Itoa(int(result.RetryAfter.Seconds())))
-    http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
-    return
-}
-```
-
-#### Reset(key string)
-
-Clear rate limit state for a key (useful for testing or admin overrides).
-
-```go
-limiter.Reset("user:123")
-```
-
-## Examples
-
-Run the included examples:
-
+**Run the examples:**
 ```bash
 go run examples/main.go
 ```
 
-The examples demonstrate:
-1. Basic rate limiting (allow/deny pattern)
-2. Burst capacity (handling traffic spikes)
-3. Detailed information (`AllowWithInfo`)
-4. Weighted costs (`AllowN`)
+## What's Coming (TODOs)
 
-## Understanding Keys
+All other files are boilerplate with TODO implementations. Each file includes:
+- Clear problem descriptions
+- Common interview questions
+- Implementation hints
+- Time/space complexity notes
+- Related problems to practice
 
-**Each unique key gets its own independent token bucket.**
+### Data Structures
 
-```go
-limiter := ratelimiter.NewTokenBucket(10, time.Second, 0)
+**LRU Cache** - HashMap + Doubly Linked List for O(1) operations
+- Get/Put in O(1) time
+- Classic interview question
 
-// Alice gets 10 req/sec
-limiter.Allow("user:alice")
-limiter.Allow("user:alice")
+**Binary Search Tree** - Insert, search, delete, validate
+- Three deletion cases
+- BST validation with bounds
 
-// Bob ALSO gets 10 req/sec (separate bucket!)
-limiter.Allow("user:bob")
+**Trie (Prefix Tree)** - String operations
+- Autocomplete
+- Word search
+- Prefix matching
 
-// Can combine factors for finer control
-limiter.Allow("user:alice:endpoint:/api/create")
-limiter.Allow("user:alice:endpoint:/api/read")
-```
+**Min/Max Heap** - Priority queue
+- K largest elements
+- Merge K sorted lists
 
-**Common key patterns:**
-- `"user:{userID}"` - Per-user limits (best for authenticated APIs)
-- `"api_key:{key}"` - Per API key (common for public APIs)
-- `"ip:{address}"` - Per IP (fallback for unauthenticated endpoints)
-- `"user:{userID}:resource:{id}"` - Per-user per-resource
+**Linked List** - Classic problems
+- Reverse list
+- Detect cycle (Floyd's algorithm)
+- Find middle
+- Merge sorted lists
 
-## Thread Safety
+### Algorithm Patterns
 
-The implementation is **thread-safe** and can be called concurrently from multiple goroutines:
+**Graph Algorithms**
+- BFS/DFS traversal
+- Cycle detection
+- Topological sort
+- Shortest path
+- Connected components
 
-```go
-limiter := ratelimiter.NewTokenBucket(100, time.Second, 0)
+**Sorting**
+- QuickSort, MergeSort, HeapSort
+- Binary Search
+- QuickSelect (Kth largest)
+- Merge K sorted arrays
 
-// Safe to call from multiple goroutines
-go func() { limiter.Allow("user:alice") }()
-go func() { limiter.Allow("user:bob") }()
-go func() { limiter.Allow("user:alice") }()
-```
+**Dynamic Programming**
+- Fibonacci, Coin Change
+- Longest Increasing Subsequence
+- Knapsack 0/1
+- Edit Distance
+- Longest Common Subsequence
 
-Internally uses `sync.Mutex` to protect shared state.
+**Backtracking**
+- Permutations, Combinations, Subsets
+- N-Queens
+- Sudoku Solver
+- Word Search
+- Generate Parentheses
 
-## Algorithm Details
+**Two Pointers / Sliding Window**
+- Two Sum, Three Sum
+- Container With Most Water
+- Longest Substring Without Repeating
+- Minimum Window Substring
+- Trapping Rain Water
 
-**Refill calculation:**
-```
-refillRate = rate / window.Seconds()
-tokensToAdd = refillRate * elapsedTime.Seconds()
-newTokens = min(currentTokens + tokensToAdd, burstSize)
-```
+## Getting Started
 
-**Example:** Rate=100/min, window=1min
-- Refill rate: 100/60 = 1.67 tokens/second
-- After 10 seconds: +16.7 tokens
-- Capped at `burstSize` (won't exceed bucket capacity)
-
-**Comparison with other algorithms:**
-
-| Algorithm | Memory | Bursts | Accuracy | Use Case |
-|-----------|--------|--------|----------|----------|
-| **Token Bucket** | O(1) | ✅ Yes | Good | Most APIs (Stripe, GitHub) |
-| Fixed Window | O(1) | ❌ Boundary issue | Fair | Simple counters |
-| Sliding Window | O(N) | ❌ No | Excellent | Financial/security |
-| Leaky Bucket | O(1) | 🔄 Smoothed | Good | Traffic shaping |
-
-**Token Bucket is recommended for most APIs** because:
-- Efficient O(1) time and space
-- Allows reasonable bursts (good UX)
-- Simple to implement and understand
-- Industry-proven (Stripe, AWS, GitHub all use it)
-
-## Testing
+### Installation
 
 ```bash
-# Run all tests
+git clone https://github.com/kaldun-tech/go-algorithm-practice.git
+cd go-algorithm-practice
+```
+
+### Running Tests
+
+```bash
+# Test everything
 go test ./...
 
-# Run with verbose output
-go test -v ./ratelimiter
+# Test specific package
+go test ./rate-limiting/token-bucket
 
-# Run specific test
-go test -run TestTokenBucket ./ratelimiter
-
-# Format and vet code
-go fmt ./...
-go vet ./...
+# Run with coverage
+go test -cover ./...
 ```
 
-## Project Structure
+### Implementation Workflow
 
-```
-go-rate-limiting/
-├── ratelimiter/
-│   ├── ratelimiter.go     # Result type definition
-│   ├── tokenbucket.go     # Token bucket implementation
-│   └── ratelimiter_test.go
-├── examples/
-│   └── main.go            # Usage examples
-├── README.md
-└── go.mod
-```
+1. **Pick a problem** from the boilerplate files
+2. **Read the comments** - they explain the problem and give hints
+3. **Implement the solution** - replace `// TODO: Implement`
+4. **Write tests** - create `*_test.go` files
+5. **Benchmark** - add benchmarks for performance-critical code
 
-## Real-World Usage
+## Why Go?
 
-**In an HTTP API:**
-```go
-func apiHandler(w http.ResponseWriter, r *http.Request) {
-    apiKey := r.Header.Get("X-API-Key")
+This repository uses Go for algorithm practice because:
+- **Simplicity**: Clean syntax, no inheritance complexity
+- **Performance**: Compiled, fast, good for algorithm analysis
+- **Standard library**: Excellent testing/benchmarking tools
+- **Industry relevance**: Used at Google, Uber, Stripe, Cloudflare
+- **Concurrency**: Built-in goroutines for concurrent algorithms
 
-    result := limiter.AllowWithInfo(apiKey, 1)
+## Interview Focus
 
-    // Set rate limit headers
-    w.Header().Set("X-RateLimit-Limit", "100")
-    w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
-    w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
+Each implementation emphasizes:
+- **Clarity over cleverness** - readable, maintainable code
+- **Edge cases** - handling invalid inputs, empty cases, boundaries
+- **Time/space complexity** - understanding trade-offs
+- **Testing** - comprehensive test cases
+- **Explanation** - comments that show understanding
 
-    if !result.Allowed {
-        w.Header().Set("Retry-After", strconv.Itoa(int(result.RetryAfter.Seconds())))
-        http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
-        return
-    }
+## Project Philosophy
 
-    // Process request...
-}
-```
+**This is NOT a copy-paste solutions repository.**
 
-**Different costs for different operations:**
-```go
-// Light read: 1 token
-limiter.AllowN(userID, 1)
+All TODO implementations should be written manually to:
+- Build muscle memory
+- Understand edge cases deeply
+- Practice explaining your thought process
+- Make mistakes and learn from them
 
-// Batch upload: 10 tokens
-limiter.AllowN(userID, 10)
+The boilerplate provides structure and hints, but YOU implement the algorithms.
 
-// AI/ML inference: 100 tokens
-limiter.AllowN(userID, 100)
-```
+## Resources
 
-## Production Considerations
+- **LeetCode** - Practice problems with test cases
+- **NeetCode** - Curated problem lists and explanations
+- **Go by Example** - Learn Go idioms
+- **Go standard library** - `sort`, `container/heap`, `container/list` for reference
 
-This implementation is perfect for:
-- ✅ Single-server applications
-- ✅ Interview coding challenges
-- ✅ Learning rate limiting algorithms
-- ✅ Local development/testing
+## Contributing
 
-For distributed systems (multiple API servers), you'd need:
-- Shared storage (Redis, Memcached)
-- Atomic operations (Lua scripts in Redis)
-- Consistent timestamps across servers
-
-See [CLAUDE.md](./CLAUDE.md) for distributed system design notes.
+This is a personal practice repository, but feel free to:
+- Fork for your own practice
+- Suggest improvements via issues
+- Share alternative approaches
 
 ## License
 
 MIT
 
-## Interview Tips
+---
 
-When implementing this in an interview:
-
-1. **Start simple:** Implement `AllowN` first, then `Allow` delegates to it
-2. **Explain the math:** Walk through refill calculation clearly
-3. **Handle edge cases:** First request, bucket empty, n > burstSize
-4. **Think about thread safety:** Explain mutex usage
-5. **Discuss trade-offs:** Compare with other algorithms
-6. **Extend thoughtfully:** Show how to add `AllowWithInfo` for headers
-
-**Common interview questions:**
-- *"How do you handle bursts?"* → Bucket capacity allows temporary spikes
-- *"What if multiple servers?"* → Need Redis for shared state
-- *"How to prevent race conditions?"* → Mutex (single server) or atomic ops (Redis)
-- *"When to use this vs. fixed window?"* → Use token bucket for better UX (allows bursts)
+**Status:** Active development. Token Bucket is complete and production-ready. Other algorithms are structured TODOs for manual implementation.

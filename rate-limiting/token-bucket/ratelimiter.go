@@ -1,4 +1,4 @@
-package ratelimiter
+package tokenbucket
 
 import "time"
 

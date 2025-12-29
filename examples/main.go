@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaldun-tech/go-rate-limiting/ratelimiter"
+	tokenbucket "github.com/kaldun-tech/go-algorithm-practice/rate-limiting/token-bucket"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 
 func exampleBasic() {
 	// Create token bucket: 10 requests per second
-	limiter := ratelimiter.NewTokenBucket(10, time.Second, 0) // burst defaults to rate
+	limiter := tokenbucket.NewTokenBucket(10, time.Second, 0) // burst defaults to rate
 
 	// Simulate requests from a user
 	key := "user:alice"
@@ -65,7 +65,7 @@ func exampleBasic() {
 
 func exampleWithBurst() {
 	// Allow bursts up to 10, but only 5 per second sustained
-	limiter := ratelimiter.NewTokenBucket(5, time.Second, 10)
+	limiter := tokenbucket.NewTokenBucket(5, time.Second, 10)
 
 	key := "user:bob"
 
@@ -82,7 +82,7 @@ func exampleWithBurst() {
 }
 
 func exampleWithInfo() {
-	limiter := ratelimiter.NewTokenBucket(10, time.Second, 15)
+	limiter := tokenbucket.NewTokenBucket(10, time.Second, 15)
 
 	key := "user:charlie"
 
@@ -117,7 +117,7 @@ func exampleWithInfo() {
 }
 
 func exampleAllowN() {
-	limiter := ratelimiter.NewTokenBucket(100, time.Minute, 100)
+	limiter := tokenbucket.NewTokenBucket(100, time.Minute, 100)
 
 	key := "user:david"
 
