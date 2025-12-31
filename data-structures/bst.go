@@ -239,10 +239,6 @@ func (bst *BST) inOrderHelperStack(n *TreeNode) []int {
 	return result
 }
 
-func (bst *BST) inOrderHelper(n *TreeNode, result *[]int) {
-	bst.inOrderHelperRecursive(n, result)
-}
-
 // InOrder returns values in sorted order (left -> root -> right)
 func (bst *BST) InOrder() []int {
 	result := []int{}
@@ -250,21 +246,48 @@ func (bst *BST) InOrder() []int {
 	return result
 }
 
-// IsValid checks if the tree is a valid BST
-// Common interview question: for each node, all left descendants < node < all right descendants
-func (bst *BST) IsValid() bool {
-	// Base case: Check whether empty
-	if bst.root == nil {
+// Checks that the tree is valid relying on the InOrder traversal function
+// Uses O(n) extra space for the array, doesn't short-circuit on the first invalid node
+func (bst *BST) isValidInOrder() bool {
+	inOrder := bst.InOrder()
+	// Check that it is in sorted order
+	for i := 1; i < len(inOrder); i++ {
+		if inOrder[i] <= inOrder[i-1] {
+			// Invariant violation
+			return false
+		}
+	}
+	return true
+}
+
+// Checks that the tree is valid using recursive bounds checking with pre-order traversal
+// Pro: O(height) space, can detect invariant violation and return early
+// Con: Slightly more complex logic with pointer bounds
+func (bst *BST) isValidHelper(n *TreeNode, min, max *int) bool {
+	if n == nil {
+		// Empty subtree
 		return true
 	}
 
-	// TODO: Implement
-	// Hint: Pass min/max bounds down the tree
-	return false
+	// Check if current node violates bounds
+	if (min != nil && n.Val <= *min) || (max != nil && *max <= n.Val) {
+		return false
+	}
+
+	// Check left subtree with upper bound of current value
+	// Check right subtree with lower bound of current value
+	return bst.isValidHelper(n.Left, min, &n.Val) &&
+		bst.isValidHelper(n.Right, &n.Val, max)
+}
+
+// IsValid checks if the tree is a valid BST
+// Common interview question: for each node, all left descendants < node < all right descendants
+func (bst *BST) IsValid() bool {
+	return bst.isValidHelper(bst.root, nil, nil)
 }
 
 // Gets the height of a sub-tree with root n
-// Why private BST helper method?
+// Why private BST helper method rather than method of TreeNode?
 // 1. Idiomatic Go: Go favors simple structs with functions, not OOP-style methods on data
 // 2. Consistency: Your other operations (doInsert, doSearch) already follow this pattern
 // 3. Separation of concerns: TreeNode is just data; BST contains the operations

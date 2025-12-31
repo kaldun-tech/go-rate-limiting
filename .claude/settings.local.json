@@ -5,7 +5,8 @@
       "Bash(go fmt:*)",
       "Bash(tree:*)",
       "Bash(mkdir:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(git add:*)"
     ]
   }
 }
