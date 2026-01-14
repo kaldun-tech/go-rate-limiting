@@ -2,9 +2,30 @@
 
 Practice guide for demonstrating LRU Cache understanding in technical interviews.
 
+## Time Investment Guide
+
+**Total Study Time:** ~10-12 hours to complete all exercises
+**Recommended Pace:** 30-60 minutes daily = 12-18 days
+
+**Quick Reference:**
+- Core implementation (Q1-6): ~6 hours (most complex data structure!)
+- Conceptual questions (Q7-10): ~1.5 hours
+- Coding challenges (Q11-15): ~3 hours
+- Practice drills: ~2 hours
+
+**Daily 30-60 Minute Sessions:**
+- Day 1: Design overview + Get operation (1 hour)
+- Day 2: Put operation basics (1 hour)
+- Day 3: moveToHead implementation (1 hour - tricky pointers!)
+- Day 4: popTail + full integration (1 hour)
+- Day 5: Debug and test (45 min)
+- Day 6-7: Conceptual questions (30 min each)
+- Day 8-10: Coding challenges (1 hour each)
+- Day 11: Mock interview (1 hour)
+
 ## Core Implementation Questions
 
-### 1. Design LRU Cache
+### 1. Design LRU Cache (⏱️ 60-90 min for full implementation)
 **Question:** Design and implement an LRU (Least Recently Used) cache with O(1) get and put operations.
 
 **Requirements:**
@@ -25,7 +46,7 @@ Practice guide for demonstrating LRU Cache understanding in technical interviews
 
 ---
 
-### 2. Data Structure Choice
+### 2. Data Structure Choice (⏱️ 10-15 min)
 **Question:** Why use a doubly linked list instead of a singly linked list?
 
 **Answer:**
@@ -38,7 +59,7 @@ Practice guide for demonstrating LRU Cache understanding in technical interviews
 
 ---
 
-### 3. Get Operation
+### 3. Get Operation (⏱️ 20-30 min)
 **Question:** Implement the Get operation.
 
 **Key Points to Cover:**
@@ -59,7 +80,7 @@ func (c *LRUCache) Get(key int) int {
 
 ---
 
-### 4. Put Operation
+### 4. Put Operation (⏱️ 30-40 min)
 **Question:** Implement the Put operation with eviction.
 
 **Key Points to Cover:**
@@ -90,7 +111,7 @@ func (c *LRUCache) Put(key int, value int) {
 
 ---
 
-### 5. Move to Head
+### 5. Move to Head (⏱️ 30-45 min)
 **Question:** Implement moveToHead - the trickiest linked list operation.
 
 **Key Points to Cover:**
@@ -130,7 +151,7 @@ func (c *LRUCache) moveToHead(n *Node) {
 
 ---
 
-### 6. Pop Tail (Eviction)
+### 6. Pop Tail (Eviction) (⏱️ 20-25 min)
 **Question:** Implement tail removal for eviction.
 
 **Key Points to Cover:**

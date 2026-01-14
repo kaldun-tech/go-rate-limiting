@@ -224,7 +224,7 @@ func (bst *BST) inOrderHelperStack(n *TreeNode) []int {
 
 	// Iterate while we have a reference node or can pop one off the stack
 	for current != nil || 0 < len(stack) {
-		// Go as far left as possibl, pushing to the stack
+		// Go as far left as possible, pushing to the stack
 		for current != nil {
 			stack = append(stack, current)
 			current = current.Left

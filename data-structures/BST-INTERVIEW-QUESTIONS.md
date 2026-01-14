@@ -2,9 +2,29 @@
 
 Practice guide for demonstrating BST understanding in technical interviews.
 
+## Time Investment Guide
+
+**Total Study Time:** ~8-10 hours to complete all exercises
+**Recommended Pace:** 30-60 minutes daily = 10-14 days
+
+**Quick Reference:**
+- Core implementations (Q1-6): ~5 hours (implement + practice)
+- Conceptual questions (Q7-10): ~1 hour (review + understand)
+- Coding challenges (Q11-15): ~3 hours (solve + optimize)
+- Practice drills: ~1-2 hours (timed practice)
+
+**Daily 30-60 Minute Sessions:**
+- Day 1: Insert + Search (1 hour)
+- Day 2: Delete (1 hour - most complex!)
+- Day 3: InOrder + Height (45 min)
+- Day 4: IsValid (1 hour - tricky!)
+- Day 5: Conceptual review (30 min)
+- Day 6-7: Coding challenges (1 hour each)
+- Day 8: Mock interview practice (1 hour)
+
 ## Core Implementation Questions
 
-### 1. Insert
+### 1. Insert (⏱️ 20-30 min)
 **Question:** Implement insert for a BST. How do you handle duplicates?
 
 **Key Points to Cover:**
@@ -18,7 +38,7 @@ Practice guide for demonstrating BST understanding in technical interviews.
 
 ---
 
-### 2. Search
+### 2. Search (⏱️ 15-20 min)
 **Question:** Implement search to find if a value exists in the BST.
 
 **Key Points to Cover:**
@@ -31,7 +51,7 @@ Practice guide for demonstrating BST understanding in technical interviews.
 
 ---
 
-### 3. Delete (Hibbard Deletion)
+### 3. Delete (Hibbard Deletion) (⏱️ 45-60 min)
 **Question:** Implement delete for a BST. This is the trickiest operation.
 
 **Key Points to Cover:**
@@ -51,7 +71,7 @@ Practice guide for demonstrating BST understanding in technical interviews.
 
 ---
 
-### 4. InOrder Traversal
+### 4. InOrder Traversal (⏱️ 20-25 min)
 **Question:** Return all values in sorted order.
 
 **Key Points to Cover:**
@@ -68,7 +88,7 @@ Practice guide for demonstrating BST understanding in technical interviews.
 
 ---
 
-### 5. Validate BST
+### 5. Validate BST (⏱️ 30-40 min)
 **Question:** Check if a binary tree is a valid BST.
 
 **Key Points to Cover:**
@@ -87,7 +107,7 @@ Practice guide for demonstrating BST understanding in technical interviews.
 
 ---
 
-### 6. Height/Depth
+### 6. Height/Depth (⏱️ 15-20 min)
 **Question:** Find the height of the BST.
 
 **Key Points to Cover:**
