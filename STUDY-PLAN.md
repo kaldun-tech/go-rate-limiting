@@ -7,7 +7,7 @@
 - [x] BST
 - [x] LRU Cache
 - [x] Token Bucket Rate Limiter
-- [ ] Heap (priority queue)
+- [x] Heap (priority queue)
 - [ ] Merkle Trees
 - [ ] Patricia Tries (MPT)
 - [ ] Bloom Filters

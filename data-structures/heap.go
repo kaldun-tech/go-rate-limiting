@@ -1,5 +1,36 @@
 package datastructures
 
+// baseHeap contains shared fields and helper methods for heap implementations
+type baseHeap struct {
+	items []int
+}
+
+func (h *baseHeap) parent(i int) int {
+	return (i - 1) / 2
+}
+
+func (h *baseHeap) leftChild(i int) int {
+	return 2*i + 1
+}
+
+func (h *baseHeap) rightChild(i int) int {
+	return 2*i + 2
+}
+
+func (h *baseHeap) swap(i, j int) {
+	h.items[i], h.items[j] = h.items[j], h.items[i]
+}
+
+// Size returns the number of elements in the heap
+func (h *baseHeap) Size() int {
+	return len(h.items)
+}
+
+// IsEmpty returns whether heap is empty
+func (h *baseHeap) IsEmpty() bool {
+	return len(h.items) == 0
+}
+
 // MinHeap implements a binary min heap
 // https://en.wikipedia.org/wiki/Binary_heap
 // Common interview uses:
@@ -8,14 +39,14 @@ package datastructures
 // - Priority queue implementation
 // - Median from data stream
 type MinHeap struct {
-	items []int
+	baseHeap
 }
 
 // NewMinHeap creates an empty min heap
 // Min heap: parent value must be less than child
 func NewMinHeap() *MinHeap {
 	return &MinHeap{
-		items: make([]int, 0),
+		baseHeap: baseHeap{items: make([]int, 0)},
 	}
 }
 
@@ -87,30 +118,52 @@ func (h *MinHeap) Peek() (int, bool) {
 	return h.items[0], true
 }
 
-// Size returns the number of elements in the heap
-func (h *MinHeap) Size() int {
-	return len(h.items)
+// Heapify converts an unordered slice into a valid min heap in-place
+// This is more efficient than inserting elements one by one
+// Time: O(n) - not O(n log n)!
+func (h *MinHeap) Heapify(items []int) {
+	// TODO: implement
+	// Hint: Start from last non-leaf node and sift down each node
+	// Last non-leaf is at index (n/2 - 1)
+	panic("not implemented")
 }
 
-// Returns whether heap is empty
-func (h *MinHeap) IsEmpty() bool {
-	return h.Size() == 0
+// MaxHeap implements a binary max heap
+type MaxHeap struct {
+	baseHeap
 }
 
-// Helper functions for heap operations
-
-func (h *MinHeap) parent(i int) int {
-	return (i - 1) / 2
+// NewMaxHeap creates an empty max heap
+func NewMaxHeap() *MaxHeap {
+	return &MaxHeap{
+		baseHeap: baseHeap{items: make([]int, 0)},
+	}
 }
 
-func (h *MinHeap) leftChild(i int) int {
-	return 2*i + 1
+// Push adds an element to the heap
+// Time: O(log n)
+func (h *MaxHeap) Push(val int) {
+	// TODO: implement (similar to MinHeap but compare for max)
+	panic("not implemented")
 }
 
-func (h *MinHeap) rightChild(i int) int {
-	return 2*i + 2
+// Pop removes and returns the maximum element
+// Time: O(log n)
+func (h *MaxHeap) Pop() (int, bool) {
+	// TODO: implement
+	panic("not implemented")
 }
 
-func (h *MinHeap) swap(i, j int) {
-	h.items[i], h.items[j] = h.items[j], h.items[i]
+// Peek returns the maximum element without removing it
+// Time: O(1)
+func (h *MaxHeap) Peek() (int, bool) {
+	// TODO: implement
+	panic("not implemented")
+}
+
+// Heapify converts an unordered slice into a valid max heap in-place
+// Time: O(n)
+func (h *MaxHeap) Heapify(items []int) {
+	// TODO: implement
+	panic("not implemented")
 }
