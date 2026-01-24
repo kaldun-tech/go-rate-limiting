@@ -1,210 +1,178 @@
-# Go Algorithm Practice
+# Blockchain Protocol Engineering Practice
 
-A collection of algorithm and data structure implementations in Go for interview preparation and skill development.
+A collection of data structures and algorithms in Go focused on blockchain protocol engineering interview preparation.
 
-## Structure
+## Focus Areas
+
+### Blockchain-Relevant Data Structures
+
+| Data Structure | Blockchain Use Case | Status |
+|----------------|---------------------|--------|
+| **Merkle Trees** | Block validation, transaction proofs, state roots | TODO |
+| **Patricia Tries** | Ethereum state storage (MPT), account/storage tries | TODO |
+| **DAGs** | UTXO models, Hedera Hashgraph, IOTA Tangle | TODO |
+| **Bloom Filters** | Log filtering, light client sync, transaction lookup | TODO |
+| **Hash Tables** | State management, mempool, peer tracking | Partial |
+
+### Protocol-Relevant Algorithms
+
+| Algorithm | Blockchain Use Case | Status |
+|-----------|---------------------|--------|
+| **Gossip Protocols** | P2P networking, block/tx propagation | TODO |
+| **Consensus Algorithms** | BFT variants, PoS mechanisms, finality | TODO |
+| **Graph Traversal** | Network topology, transaction flows, UTXO graphs | TODO |
+| **Serialization** | RLP encoding, SSZ, protobuf for wire protocols | TODO |
+| **Rate Limiting** | P2P DOS protection, API throttling | Done |
+
+## Project Structure
 
 ```
 go-algorithm-practice/
-├── rate-limiting/          # Rate limiting algorithms
-│   └── token-bucket/      # Token bucket implementation (complete)
-├── data-structures/        # Common data structures
-│   ├── lru-cache.go       # LRU Cache (TODO)
-│   ├── bst.go             # Binary Search Tree (TODO)
-│   ├── trie.go            # Prefix Tree (TODO)
-│   ├── heap.go            # Min/Max Heap (TODO)
-│   └── linkedlist.go      # Linked List problems (TODO)
-├── algorithms/             # Algorithm patterns
-│   ├── graph.go           # Graph traversal (BFS, DFS, etc.) (TODO)
-│   ├── sorting.go         # Sorting algorithms (TODO)
-│   ├── dynamic-programming.go  # DP problems (TODO)
-│   ├── backtracking.go    # Backtracking patterns (TODO)
-│   └── two-pointers.go    # Two pointer techniques (TODO)
-└── examples/              # Usage examples
-
+├── data-structures/
+│   ├── merkle/           # Merkle trees (TODO)
+│   ├── patricia/         # Patricia/MPT tries (TODO)
+│   ├── dag/              # Directed acyclic graphs (TODO)
+│   ├── bloom/            # Bloom filters (TODO)
+│   ├── trie.go           # Basic trie (existing)
+│   ├── bst.go            # Binary search tree (existing)
+│   └── lru-cache.go      # LRU cache (existing)
+├── algorithms/
+│   ├── gossip/           # Gossip protocol simulation (TODO)
+│   ├── consensus/        # BFT/consensus primitives (TODO)
+│   ├── serialization/    # RLP, SSZ encoding (TODO)
+│   └── graph.go          # Graph algorithms (existing)
+├── rate-limiting/
+│   └── token-bucket/     # Token bucket rate limiter (complete)
+└── examples/
 ```
+
+## Implementation Roadmap
+
+### Phase 1: Core Data Structures
+
+**Merkle Trees**
+- Basic binary Merkle tree with SHA-256
+- Proof generation and verification
+- Sparse Merkle trees for state proofs
+- Multi-proof optimization
+
+**Patricia Tries (MPT)**
+- Ethereum's Modified Patricia Trie
+- Compact encoding (hex-prefix)
+- State root calculation
+- Proof generation for light clients
+
+### Phase 2: Network Primitives
+
+**Bloom Filters**
+- Basic Bloom filter with configurable false positive rate
+- Counting Bloom filters for deletion
+- Ethereum log bloom implementation
+- Light client block filtering
+
+**Gossip Protocols**
+- Epidemic broadcast simulation
+- Push/pull gossip variants
+- Peer sampling
+- Message deduplication
+
+### Phase 3: Consensus & Graphs
+
+**DAGs**
+- UTXO graph representation
+- Topological ordering
+- Conflict detection
+- DAG-based consensus (Narwhal-style)
+
+**Consensus Primitives**
+- PBFT message flow simulation
+- View change protocol
+- Finality gadgets
+- Validator set management
+
+### Phase 4: Wire Protocols
+
+**Serialization**
+- RLP encoding/decoding (Ethereum)
+- SSZ for Ethereum 2.0
+- Protobuf for inter-node communication
+- Benchmarking serialization performance
 
 ## What's Implemented
 
-### Rate Limiting - Token Bucket ✅
+### Token Bucket Rate Limiter
 
-A complete, production-ready implementation of the Token Bucket rate limiting algorithm used by Stripe, GitHub, and AWS.
+Production-ready rate limiting for P2P and API protection.
 
-**Features:**
-- Thread-safe with `sync.Mutex`
-- Key-based rate limiting (per-user, per-API-key, per-IP)
-- Burst support
-- Detailed rate limit information for HTTP headers
-- Weighted costs (different operations cost different tokens)
-
-**Quick example:**
 ```go
 import tokenbucket "github.com/kaldun-tech/go-algorithm-practice/rate-limiting/token-bucket"
 
-// Create limiter: 10 requests/second
-limiter := tokenbucket.NewTokenBucket(10, time.Second, 0)
+// Create limiter: 100 requests/second with burst of 20
+limiter := tokenbucket.NewTokenBucket(100, time.Second, 20)
 
-// Check if request allowed
-if limiter.Allow("user:alice") {
-    fmt.Println("Request allowed!")
+// Per-peer rate limiting
+if limiter.Allow("peer:" + peerID) {
+    handleMessage(msg)
 }
 ```
 
-See [rate-limiting/CLAUDE.md](rate-limiting/CLAUDE.md) for detailed implementation notes and interview tips.
+**Features:**
+- Thread-safe with `sync.Mutex`
+- Per-key rate limiting (per-peer, per-IP)
+- Burst support for traffic spikes
+- Weighted costs for different message types
 
-**Run the examples:**
-```bash
-go run examples/main.go
-```
-
-## What's Coming (TODOs)
-
-All other files are boilerplate with TODO implementations. Each file includes:
-- Clear problem descriptions
-- Common interview questions
-- Implementation hints
-- Time/space complexity notes
-- Related problems to practice
-
-### Data Structures
-
-**LRU Cache** - HashMap + Doubly Linked List for O(1) operations
-- Get/Put in O(1) time
-- Classic interview question
-
-**Binary Search Tree** - Insert, search, delete, validate
-- Three deletion cases
-- BST validation with bounds
-
-**Trie (Prefix Tree)** - String operations
-- Autocomplete
-- Word search
-- Prefix matching
-
-**Min/Max Heap** - Priority queue
-- K largest elements
-- Merge K sorted lists
-
-**Linked List** - Classic problems
-- Reverse list
-- Detect cycle (Floyd's algorithm)
-- Find middle
-- Merge sorted lists
-
-### Algorithm Patterns
-
-**Graph Algorithms**
-- BFS/DFS traversal
-- Cycle detection
-- Topological sort
-- Shortest path
-- Connected components
-
-**Sorting**
-- QuickSort, MergeSort, HeapSort
-- Binary Search
-- QuickSelect (Kth largest)
-- Merge K sorted arrays
-
-**Dynamic Programming**
-- Fibonacci, Coin Change
-- Longest Increasing Subsequence
-- Knapsack 0/1
-- Edit Distance
-- Longest Common Subsequence
-
-**Backtracking**
-- Permutations, Combinations, Subsets
-- N-Queens
-- Sudoku Solver
-- Word Search
-- Generate Parentheses
-
-**Two Pointers / Sliding Window**
-- Two Sum, Three Sum
-- Container With Most Water
-- Longest Substring Without Repeating
-- Minimum Window Substring
-- Trapping Rain Water
-
-## Getting Started
-
-### Installation
-
-```bash
-git clone https://github.com/kaldun-tech/go-algorithm-practice.git
-cd go-algorithm-practice
-```
+## Development
 
 ### Running Tests
 
 ```bash
-# Test everything
-go test ./...
-
-# Test specific package
-go test ./rate-limiting/token-bucket
-
-# Run with coverage
-go test -cover ./...
+go test ./...                    # All tests
+go test -v ./rate-limiting/...   # Rate limiting tests
+go test -bench=. ./...           # Benchmarks
 ```
 
-### Implementation Workflow
+### Code Quality
 
-1. **Pick a problem** from the boilerplate files
-2. **Read the comments** - they explain the problem and give hints
-3. **Implement the solution** - replace `// TODO: Implement`
-4. **Write tests** - create `*_test.go` files
-5. **Benchmark** - add benchmarks for performance-critical code
+```bash
+go fmt ./...    # Format
+go vet ./...    # Static analysis
+go mod tidy     # Clean deps
+```
 
-## Why Go?
+## Why These Topics?
 
-This repository uses Go for algorithm practice because:
-- **Simplicity**: Clean syntax, no inheritance complexity
-- **Performance**: Compiled, fast, good for algorithm analysis
-- **Standard library**: Excellent testing/benchmarking tools
-- **Industry relevance**: Used at Google, Uber, Stripe, Cloudflare
-- **Concurrency**: Built-in goroutines for concurrent algorithms
+Blockchain protocol engineering interviews focus on:
 
-## Interview Focus
+1. **Data integrity** - Merkle proofs, state roots, cryptographic commitments
+2. **Distributed systems** - Consensus, gossip, network partitions
+3. **Performance** - Efficient serialization, caching, batching
+4. **Security** - DOS protection, rate limiting, input validation
 
-Each implementation emphasizes:
-- **Clarity over cleverness** - readable, maintainable code
-- **Edge cases** - handling invalid inputs, empty cases, boundaries
-- **Time/space complexity** - understanding trade-offs
-- **Testing** - comprehensive test cases
-- **Explanation** - comments that show understanding
+This differs from typical leetcode prep which emphasizes:
+- Array/string manipulation
+- Dynamic programming patterns
+- Generic tree/graph problems
 
-## Project Philosophy
-
-**This is NOT a copy-paste solutions repository.**
-
-All TODO implementations should be written manually to:
-- Build muscle memory
-- Understand edge cases deeply
-- Practice explaining your thought process
-- Make mistakes and learn from them
-
-The boilerplate provides structure and hints, but YOU implement the algorithms.
+The implementations here are directly applicable to building blockchain clients, validators, and infrastructure.
 
 ## Resources
 
-- **LeetCode** - Practice problems with test cases
-- **NeetCode** - Curated problem lists and explanations
-- **Go by Example** - Learn Go idioms
-- **Go standard library** - `sort`, `container/heap`, `container/list` for reference
+### Specifications
+- [Ethereum Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf) - MPT, RLP, state model
+- [Ethereum Execution Specs](https://github.com/ethereum/execution-specs) - Python reference
+- [SSZ Spec](https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md)
 
-## Contributing
+### Papers
+- [Merkle Trees in Distributed Systems](https://www.cs.cmu.edu/~rwh/theses/okasaki.pdf)
+- [PBFT](https://pmg.csail.mit.edu/papers/osdi99.pdf) - Practical Byzantine Fault Tolerance
+- [Narwhal and Tusk](https://arxiv.org/abs/2105.11827) - DAG-based consensus
 
-This is a personal practice repository, but feel free to:
-- Fork for your own practice
-- Suggest improvements via issues
-- Share alternative approaches
+### Implementations
+- [go-ethereum](https://github.com/ethereum/go-ethereum) - Ethereum client
+- [prysm](https://github.com/prysmaticlabs/prysm) - Ethereum consensus client
+- [tendermint](https://github.com/tendermint/tendermint) - BFT consensus engine
 
 ## License
 
 MIT
-
----
-
-**Status:** Active development. Token Bucket is complete and production-ready. Other algorithms are structured TODOs for manual implementation.

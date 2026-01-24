@@ -124,7 +124,7 @@ func (t *Trie) DeleteIterative(word string) bool {
 		}
 	}
 
-	// Deleted everything going up -> empty trie
+	// Deleted everything going up -> possibly empty trie
 	return true
 }
 
