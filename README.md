@@ -29,10 +29,11 @@ A collection of data structures and algorithms in Go focused on blockchain proto
 ```
 go-algorithm-practice/
 ├── data-structures/
-│   ├── merkle/           # Merkle trees (TODO)
-│   ├── patricia/         # Patricia/MPT tries (TODO)
-│   ├── dag/              # Directed acyclic graphs (TODO)
-│   ├── bloom/            # Bloom filters (TODO)
+│   ├── merkle.go         # Merkle trees (TODO)
+│   ├── patricia.go       # Patricia/MPT tries (TODO)
+│   ├── dag.go            # Directed acyclic graphs (TODO)
+│   ├── bloom.go          # Bloom filters (TODO)
+|   ├── heap.go           # Min/Max Heap (complete)
 │   ├── trie.go           # Basic trie (existing)
 │   ├── bst.go            # Binary search tree (existing)
 │   └── lru-cache.go      # LRU cache (existing)

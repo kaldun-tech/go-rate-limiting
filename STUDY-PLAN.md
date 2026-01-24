@@ -32,13 +32,16 @@ Priority queues are used for:
 - Timer management in consensus
 
 **Key operations to implement:**
-- [ ] Insert (sift up)
-- [ ] ExtractMin/ExtractMax (sift down)
-- [ ] Peek
-- [ ] Heapify (build heap from array)
+- [x] Insert (sift up)
+- [x] ExtractMin/ExtractMax (sift down)
+- [x] Peek
+- [x] Heapify (build heap from array)
 
 **Notes:**
 ```
+Peek operation is identical across Min and Max heaps.
+The internal siftDown operation is identical and can be done on the base class using a comparator
+Pop (ExtractMin/Max) and Heapify then become identical using the siftDown with appropriate comparator (< or >)
 ```
 
 ---
