@@ -1,6 +1,7 @@
 package datastructures
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 )
@@ -170,27 +171,66 @@ func (t *MerkleTree) GenerateProof(index int) (*MerkleProof, error) {
 // VerifyProof checks if a proof is valid for a given root hash
 // Time: O(log n)
 func VerifyProof(proof *MerkleProof) bool {
-	// TODO: implement
-	// Hint: Recompute root from leaf using siblings, compare to expected root
-	panic("not implemented")
+	// Check that the proof is correctly formed
+	if proof == nil || len(proof.LeafHash) == 0 || len(proof.RootHash) == 0 || len(proof.Siblings) != len(proof.PathBits) {
+		// Error case
+		return false
+	}
+
+	// Recompute root from leaf using siblings, compare to expected root
+	hash := proof.LeafHash
+	for i, sib := range proof.Siblings {
+		sibIsRight := proof.PathBits[i]
+		if sibIsRight {
+			// sibling on the right -> parent hash = hash(current || sibling)
+			hash = hashPair(hash, sib)
+		} else {
+			// sibling on left -> parent hash = hash(sibling || current)
+			hash = hashPair(sib, hash)
+		}
+	}
+
+	// Final hash should match expected value at root
+	return bytes.Equal(hash, proof.RootHash)
 }
 
 // SparseMerkleTree implements a sparse Merkle tree
 // Useful for key-value stores with a fixed key space (e.g., 256-bit keys)
+// https://medium.com/@kelvinfichter/whats-a-sparse-merkle-tree-acda70aeb837
 // Blockchain uses:
 // - Account state trees
 // - Storage tries
 type SparseMerkleTree struct {
 	root          []byte
 	depth         int
-	defaultHashes [][]byte // precomputed hashes for empty subtrees
+	defaultHashes [][]byte          // precomputed hashes for empty subtrees
+	values        map[string][]byte // key-value pair storage of defined values
 }
 
 // NewSparseMerkleTree creates a sparse Merkle tree with the given depth
 func NewSparseMerkleTree(depth int) *SparseMerkleTree {
-	// TODO: implement
-	// Hint: Precompute default hashes for each level
-	panic("not implemented")
+	tree := &SparseMerkleTree{
+		depth:         depth,
+		defaultHashes: make([][]byte, depth+1),
+		values:        make(map[string][]byte),
+	}
+
+	// Precompute default hashes for each level
+	// defaultHashes[i] = hash of an empty subtree of height i
+	// Since all empty subtrees of the same height are identical,
+	// we only need one hash per level (this is the "sparse" optimization)
+
+	// Level 0: hash of empty leaf value
+	emptyLeaf := sha256.Sum256([]byte{})
+	tree.defaultHashes[0] = emptyLeaf[:]
+
+	// Each subsequent level: hash(emptyChild || emptyChild)
+	for i := 1; i <= depth; i++ {
+		tree.defaultHashes[i] = hashPair(tree.defaultHashes[i-1], tree.defaultHashes[i-1])
+	}
+
+	tree.root = tree.defaultHashes[depth]
+	return tree
 }
 
 // Get retrieves the value at the given key
