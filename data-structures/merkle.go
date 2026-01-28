@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 )
 
 // MerkleTree implements a binary Merkle tree
@@ -204,7 +205,7 @@ type SparseMerkleTree struct {
 	root          []byte
 	depth         int
 	defaultHashes [][]byte          // precomputed hashes for empty subtrees
-	values        map[string][]byte // key-value pair storage of defined values
+	nodes         map[string][]byte // stores non-default intermediate hashes
 }
 
 // NewSparseMerkleTree creates a sparse Merkle tree with the given depth
@@ -212,7 +213,7 @@ func NewSparseMerkleTree(depth int) *SparseMerkleTree {
 	tree := &SparseMerkleTree{
 		depth:         depth,
 		defaultHashes: make([][]byte, depth+1),
-		values:        make(map[string][]byte),
+		nodes:         make(map[string][]byte),
 	}
 
 	// Precompute default hashes for each level
@@ -234,15 +235,105 @@ func NewSparseMerkleTree(depth int) *SparseMerkleTree {
 }
 
 // Get retrieves the value at the given key
+// The key is a cryptographic hash as 256-bit value
+// Go strings are immutable byte sequences so we can use the []byte as a string
 func (t *SparseMerkleTree) Get(key []byte) ([]byte, error) {
-	// TODO: implement
-	panic("not implemented")
+	err := t.validateKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	val, exists := t.nodes[string(key)]
+	if !exists {
+		return nil, errors.New("Not found for key")
+	}
+	return val, nil
 }
 
 // Set updates the value at the given key
+// Key bits indicate which direction to go at a given level: 0 for left, 1 for right
 func (t *SparseMerkleTree) Set(key, value []byte) error {
-	// TODO: implement
-	panic("not implemented")
+	err := t.validateKey(key)
+	if err != nil {
+		return err
+	}
+
+	// Set the value of the node
+	t.nodes[string(key)] = value
+	// Hash the value of the leaf
+	leafHash := sha256.Sum256(value)
+	// Walk from leaf (level 0) to root (level depth)
+	for i := range t.depth {
+		// Determine whether this node is left or right child from key bit at level
+		isRight := isRightChild(key, i)
+		// Get sibling hash from nodes map or defaultHashes[level] if sibling is empty
+
+		// Combine hash of left and right
+
+		// Store result in nodes for that position
+	}
+
+	// Update the root with the final hash
+
+	return nil
+}
+
+func (t *SparseMerkleTree) validateKey(key []byte) error {
+	if key == nil {
+		return errors.New("Key cannot be nil")
+	}
+
+	// For depth d we need d bits to navigate the tree
+	// Therefore key must be >= ceil(d/8) bytes long
+	expectedLen := (t.depth + 7) / 8
+	if len(key) != expectedLen {
+		return errors.New("Invalid key length")
+	}
+	return nil
+}
+
+// Uses bit extraction. Returns true if bit at position is 1, false if 0
+// pos 0 = first bit used from root level to initial set of children - Most significant bit (MSB)
+func isRightChild(key []byte, pos int) bool {
+	byteIdx := pos / 8
+	bitIdx := uint(7 - (pos % 8))
+	return (key[byteIdx] & (1 << bitIdx)) != 0
+}
+
+// Retrieve from nodes map, falling back to defaultHashes
+func (t *SparseMerkleTree) getNodeHash(level int, key []byte) []byte {
+	// For node addressing use a simple map key identifying the leaf path and level up the path
+	// Works because siblings at the same level will have different keys because they differ in the bit at that level
+	kStr := fmt.Sprintf("%d:%x", level, key)
+	val, exists := t.nodes[kStr]
+	if exists {
+		return val
+	}
+
+	// Return default value
+	return t.defaultHashes[level]
+}
+
+// Store in nodes map
+func (t *SparseMerkleTree) setNodeHash(level int, key, hash []byte) {
+	kStr := fmt.Sprintf("%d:%x", level, key)
+	t.nodes[kStr] = hash
+}
+
+// Get sibling hash - flip the relevant bit and look up that node
+func (t *SparseMerkleTree) getSiblingHash(level int, key []byte) []byte {
+	// Make defensive copy
+	keyCopy := make([]byte, len(key))
+	copy(keyCopy, key)
+	// Which bit determines left or right at this level
+	bitPos := t.depth - 1 - level
+	byteIdx := bitPos / 8
+	// Most significant bit is first within byte
+	bitIdx := uint(7 - (bitPos % 8))
+	// Flip the bit using XOR
+	keyCopy[byteIdx] ^= (1 << bitIdx)
+
+	return t.getNodeHash(level, keyCopy)
 }
 
 // GenerateProof creates a proof of inclusion/exclusion for a key
