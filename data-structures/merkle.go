@@ -258,24 +258,67 @@ func (t *SparseMerkleTree) Set(key, value []byte) error {
 		return err
 	}
 
-	// Set the value of the node
+	// Set the value of the node directly for Get to retrieve the raw value
 	t.nodes[string(key)] = value
-	// Hash the value of the leaf
-	leafHash := sha256.Sum256(value)
-	// Walk from leaf (level 0) to root (level depth)
+	// Hash the value of the leaf and store it for proof generation
+	currentHash := sha256.Sum256(value)
+	t.setNodeHash(0, key, currentHash[:])
+
+	// Walk from leaf (level 0) to root (level depth). Use a new variable to not overwrite stored value
+	computedHash := currentHash[:]
 	for i := range t.depth {
 		// Determine whether this node is left or right child from key bit at level
-		isRight := isRightChild(key, i)
+		pos := t.depth - 1 - i
+		isRight := isRightChild(key, pos)
 		// Get sibling hash from nodes map or defaultHashes[level] if sibling is empty
+		siblingHash := t.getSiblingHash(i, key)
 
 		// Combine hash of left and right
+		var newHash []byte
+		if isRight {
+			newHash = hashPair(siblingHash, computedHash)
+		} else {
+			newHash = hashPair(computedHash, siblingHash)
+		}
 
-		// Store result in nodes for that position
+		// Store fresh slice result in nodes for that position
+		t.setNodeHash(i+1, key, newHash)
+		computedHash = newHash
 	}
 
-	// Update the root with the final hash
-
+	// Update the root with the final hash after the loop
+	t.root = computedHash
 	return nil
+}
+
+// GenerateProof creates a proof of inclusion/exclusion for a leaf key
+// Returns tuple: proof pointer, error if one occurs
+func (t *SparseMerkleTree) GenerateProof(key []byte) (*MerkleProof, error) {
+	err := t.validateKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the value or default of input leaf key
+	leafHash := t.getNodeHash(0, key)
+
+	// Build proof
+	proof := &MerkleProof{
+		Siblings: [][]byte{},
+		PathBits: []bool{},
+		RootHash: t.root,
+		LeafHash: leafHash,
+	}
+
+	// Loop through levels 0 through depth - 1 collecting siblings
+	for level := range t.depth {
+		proof.Siblings = append(proof.Siblings, t.getSiblingHash(level, key))
+		// Note relationship with isRightChild: current node isRight -> sibling on the left
+		bitPos := t.depth - 1 - level
+		proof.PathBits = append(proof.PathBits, !isRightChild(key, bitPos))
+	}
+
+	return proof, nil
 }
 
 func (t *SparseMerkleTree) validateKey(key []byte) error {
@@ -314,7 +357,7 @@ func (t *SparseMerkleTree) getNodeHash(level int, key []byte) []byte {
 	return t.defaultHashes[level]
 }
 
-// Store in nodes map
+// Store in nodes map. Pretty simple
 func (t *SparseMerkleTree) setNodeHash(level int, key, hash []byte) {
 	kStr := fmt.Sprintf("%d:%x", level, key)
 	t.nodes[kStr] = hash
@@ -334,10 +377,4 @@ func (t *SparseMerkleTree) getSiblingHash(level int, key []byte) []byte {
 	keyCopy[byteIdx] ^= (1 << bitIdx)
 
 	return t.getNodeHash(level, keyCopy)
-}
-
-// GenerateProof creates a proof of inclusion/exclusion for a key
-func (t *SparseMerkleTree) GenerateProof(key []byte) (*MerkleProof, error) {
-	// TODO: implement
-	panic("not implemented")
 }
