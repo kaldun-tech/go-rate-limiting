@@ -1,6 +1,7 @@
 package algorithms
 
 import (
+	"encoding/binary"
 	"errors"
 	"io"
 )
@@ -24,7 +25,6 @@ import (
 // RLPEncode encodes a value to RLP format
 // value can be: []byte, string, []interface{} (for lists), or uint64
 func RLPEncode(value interface{}) ([]byte, error) {
-	// TODO: Implement
 	// Handle different types:
 	// - []byte / string: encode as string
 	// - []interface{}: encode as list (recursively encode each item)
@@ -35,50 +35,168 @@ func RLPEncode(value interface{}) ([]byte, error) {
 
 // RLPEncodeString encodes a byte slice as RLP string
 func RLPEncodeString(data []byte) []byte {
-	// TODO: Implement
-	// Single byte [0x00, 0x7f]: return as-is
-	// 0-55 bytes: 0x80 + len, then data
-	// > 55 bytes: 0xb7 + len(lenBytes), then lenBytes, then data
-	return nil
+	dataLen := len(data)
+	if dataLen == 1 && data[0] <= 0x7f {
+		// Single byte in range[0x00, 0x7f]: return as-is
+		return data
+	} else if dataLen <= 55 {
+		// 0-55 bytes: 0x80 + len, then data
+		prefix := []byte{0x80 + byte(dataLen)}
+		return append(prefix, data...)
+	} else {
+		// > 55 bytes: 0xb7 + len(lenBytes), then lenBytes, then data
+		// Encode length as minimal big-endian bytes without leading zeros
+		lenBytes := encodeBigEndian(uint64(dataLen)) // e.g., 256 -> [0x01, 0x00]
+		prefix := append([]byte{0xb7 + byte(len(lenBytes))}, lenBytes...)
+		return append(prefix, data...) // data stays intact
+	}
 }
 
 // RLPEncodeList encodes a list of RLP-encoded items
 func RLPEncodeList(items [][]byte) []byte {
-	// TODO: Implement
-	// Concatenate all items, then prefix with list header
-	// 0-55 bytes total: 0xc0 + len, then items
-	// > 55 bytes: 0xf7 + len(lenBytes), then lenBytes, then items
-	return nil
+	// Concatenate all items as flat bytes
+	result := []byte{}
+	for _, arr := range items {
+		for _, b := range arr {
+			result = append(result, b)
+		}
+	}
+
+	// Then prefix with list header
+	payloadLen := len(result)
+	var prefix []byte
+	if payloadLen <= 55 {
+		// 0-55 bytes total: 0xc0 + len, then items
+		prefix = []byte{0xc0 + byte(payloadLen)}
+	} else {
+		// > 55 bytes: 0xf7 + len(lenBytes), then lenBytes, then items
+		lenBytes := encodeBigEndian(uint64(payloadLen))
+		prefix = []byte{0xf7 + byte(len(lenBytes))}
+		prefix = append(prefix, lenBytes...)
+	}
+	return append(prefix, result...)
 }
 
 // RLPEncodeUint64 encodes a uint64 as RLP
 func RLPEncodeUint64(n uint64) []byte {
-	// TODO: Implement
-	// 0: empty string (0x80)
-	// 1-127: single byte
-	// > 127: encode as big-endian bytes without leading zeros
-	return nil
+	if n == 0 {
+		// 0: empty string (0x80)
+		return []byte{0x80}
+	} else if n <= 127 {
+		// 1-127: single byte
+		return []byte{byte(n)}
+	} else {
+		// > 127: encode as big-endian bytes without leading zeros
+		// 256 should encode as [0x82, 0x01, 0x00] (prefix + 2 bytes)
+		nBytes := encodeBigEndian(n)
+		return RLPEncodeString(nBytes)
+	}
 }
 
 // RLPDecode decodes RLP data into a value
 // Returns one of: []byte (string), []interface{} (list)
 func RLPDecode(data []byte) (interface{}, error) {
-	// TODO: Implement
 	result, _, err := rlpDecodeItem(data, 0)
 	return result, err
+}
+
+// Converts an integer to the minimum bytes needed in big-endian order.
+// Input: 56    → Output: [0x38]           (1 byte)
+// Input: 255   → Output: [0xff]           (1 byte)
+// Input: 256   → Output: [0x01, 0x00]     (2 bytes)
+// Input: 1024  → Output: [0x04, 0x00]     (2 bytes)
+// Input: 65536 → Output: [0x01, 0x00, 0x00] (3 bytes)
+func encodeBigEndian(n uint64) []byte {
+	// Put into 8-byte buffer
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, n)
+
+	// Find first non-zero byte (strip leading zeros)
+	i := 0
+	for i < 7 && buf[i] == 0 {
+		i++
+	}
+	return buf[i:]
+}
+
+// Takes a variable-length byte slice and returns the integer
+// Input: [0x38]               → Output: 56
+// Input: [0x01, 0x00]         → Output: 256
+// Input: [0x01, 0x00, 0x00]   → Output: 65536
+func decodeBigEndian(lenBytes []byte) int {
+	// Pad to 8 bytes on the left
+	buf := make([]byte, 8)
+	copy(buf[8-len(lenBytes):], lenBytes)
+	return int(binary.BigEndian.Uint64(buf))
 }
 
 // rlpDecodeItem decodes one RLP item starting at offset
 // Returns: decoded value, bytes consumed, error
 func rlpDecodeItem(data []byte, offset int) (interface{}, int, error) {
-	// TODO: Implement
+	if len(data) == 0 {
+		return nil, 0, errors.New("Empty data")
+	} else if len(data) <= offset {
+		return nil, 0, errors.New("Index out of bounds")
+	}
 	// Check first byte to determine type:
-	// [0x00, 0x7f]: single byte
-	// [0x80, 0xb7]: short string
-	// [0xb8, 0xbf]: long string
-	// [0xc0, 0xf7]: short list
-	// [0xf8, 0xff]: long list
-	return nil, 0, errors.New("not implemented")
+	key := data[offset]
+	// Empty string: [ 0x80 ] -> null
+	if key == 0x80 {
+		return "", 1, nil
+	}
+	if key == 0xc0 {
+		// Empty list
+		return []byte{}, 1, nil
+	}
+	// Range [0x00, 0x7f]: single byte
+	if key <= 0x7f {
+		return key, 1, nil
+	}
+	// Range [0x80, 0xb7]: short string
+	if key <= 0xb7 {
+		dataLen := int(key - 0x80)
+		return data[offset+1 : offset+1+dataLen], dataLen + 1, nil
+	}
+	// Range [0xb8, 0xbf]: long string
+	if key <= 0xbf {
+		// Convert the length from byte[] to int
+		numLenBytes := int(key - 0xb7)
+		dataLen := decodeBigEndian(data[offset+1 : offset+1+numLenBytes])
+		dataStart := offset + 1 + numLenBytes
+		totalConsumed := 1 + numLenBytes + dataLen
+		return data[dataStart : dataStart+dataLen], totalConsumed, nil
+	}
+	// Range [0xc0, 0xf7]: short list
+	if key <= 0xf7 {
+		payloadLen := int(key - 0xc0)
+		items := []interface{}{}
+		pos := offset + 1
+		endPos := offset + 1 + payloadLen
+		for pos < endPos {
+			item, consumed, err := rlpDecodeItem(data, pos)
+			if err != nil {
+				return nil, 0, err
+			}
+			items = append(items, item)
+			pos += consumed
+		}
+		return items, 1 + payloadLen, nil
+	}
+	// Range [0xf8, 0xff]: long list
+	numLenBytes := int(key - 0xf7)
+	payloadLen := decodeBigEndian(data[offset+1 : offset+1+numLenBytes])
+	items := []interface{}{}
+	pos := offset + 1 + numLenBytes // Start of payload
+	endPos := pos + payloadLen      // End of payload
+	for pos < endPos {
+		item, consumed, err := rlpDecodeItem(data, pos)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+		pos += consumed
+	}
+	return items, 1 + numLenBytes + payloadLen, nil
 }
 
 // RLPReader provides streaming RLP decoding

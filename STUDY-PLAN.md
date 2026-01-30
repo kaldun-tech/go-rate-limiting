@@ -8,7 +8,7 @@
 - [x] LRU Cache
 - [x] Token Bucket Rate Limiter
 - [x] Heap (priority queue)
-- [ ] Merkle Trees
+- [x] Merkle Trees
 - [ ] Patricia Tries (MPT)
 - [ ] Bloom Filters
 - [ ] DAGs
