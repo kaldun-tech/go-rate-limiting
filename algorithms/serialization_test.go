@@ -461,3 +461,228 @@ func TestRLPRoundTrip_Uint64(t *testing.T) {
 		}
 	}
 }
+
+// ========== RLPReader Tests ==========
+
+func TestRLPReader_ReadString_SingleByte(t *testing.T) {
+	tests := []struct {
+		input    []byte
+		expected []byte
+	}{
+		{[]byte{0x00}, []byte{0x00}},
+		{[]byte{0x01}, []byte{0x01}},
+		{[]byte{0x7f}, []byte{0x7f}},
+	}
+
+	for _, tc := range tests {
+		reader := NewRLPReader(bytes.NewReader(tc.input))
+		got, err := reader.ReadString()
+		if err != nil {
+			t.Errorf("ReadString(%x) failed: %v", tc.input, err)
+			continue
+		}
+		if !bytes.Equal(got, tc.expected) {
+			t.Errorf("ReadString(%x) = %x, want %x", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func TestRLPReader_ReadString_Empty(t *testing.T) {
+	input := []byte{0x80}
+	reader := NewRLPReader(bytes.NewReader(input))
+	got, err := reader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString failed: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("ReadString(0x80) = %x, want empty", got)
+	}
+}
+
+func TestRLPReader_ReadString_Short(t *testing.T) {
+	// "dog" encoded
+	input := []byte{0x83, 0x64, 0x6f, 0x67}
+	reader := NewRLPReader(bytes.NewReader(input))
+	got, err := reader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString failed: %v", err)
+	}
+	if string(got) != "dog" {
+		t.Errorf("ReadString = %q, want %q", got, "dog")
+	}
+}
+
+func TestRLPReader_ReadString_Long(t *testing.T) {
+	// 56 bytes of 'A'
+	original := bytes.Repeat([]byte{0x41}, 56)
+	encoded := RLPEncodeString(original)
+
+	reader := NewRLPReader(bytes.NewReader(encoded))
+	got, err := reader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString failed: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Errorf("ReadString length = %d, want %d", len(got), len(original))
+	}
+}
+
+func TestRLPReader_ReadString_VeryLong(t *testing.T) {
+	// 1024 bytes
+	original := bytes.Repeat([]byte{0x42}, 1024)
+	encoded := RLPEncodeString(original)
+
+	reader := NewRLPReader(bytes.NewReader(encoded))
+	got, err := reader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString failed: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Errorf("ReadString length = %d, want %d", len(got), len(original))
+	}
+}
+
+func TestRLPReader_ReadString_ErrorOnList(t *testing.T) {
+	// List prefix should error
+	input := []byte{0xc0}
+	reader := NewRLPReader(bytes.NewReader(input))
+	_, err := reader.ReadString()
+	if err == nil {
+		t.Error("ReadString should fail on list prefix")
+	}
+}
+
+func TestRLPReader_ReadList_Empty(t *testing.T) {
+	input := []byte{0xc0}
+	reader := NewRLPReader(bytes.NewReader(input))
+	listReader, err := reader.ReadList()
+	if err != nil {
+		t.Fatalf("ReadList failed: %v", err)
+	}
+
+	// Reading from empty list should EOF
+	_, err = listReader.ReadString()
+	if err == nil {
+		t.Error("Expected EOF from empty list")
+	}
+}
+
+func TestRLPReader_ReadList_SingleItem(t *testing.T) {
+	// List containing "dog"
+	input := []byte{0xc4, 0x83, 0x64, 0x6f, 0x67}
+	reader := NewRLPReader(bytes.NewReader(input))
+
+	listReader, err := reader.ReadList()
+	if err != nil {
+		t.Fatalf("ReadList failed: %v", err)
+	}
+
+	item, err := listReader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString from list failed: %v", err)
+	}
+	if string(item) != "dog" {
+		t.Errorf("Item = %q, want %q", item, "dog")
+	}
+}
+
+func TestRLPReader_ReadList_MultipleItems(t *testing.T) {
+	// List containing "cat" and "dog"
+	input := []byte{0xc8, 0x83, 0x63, 0x61, 0x74, 0x83, 0x64, 0x6f, 0x67}
+	reader := NewRLPReader(bytes.NewReader(input))
+
+	listReader, err := reader.ReadList()
+	if err != nil {
+		t.Fatalf("ReadList failed: %v", err)
+	}
+
+	cat, err := listReader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString(cat) failed: %v", err)
+	}
+	if string(cat) != "cat" {
+		t.Errorf("First item = %q, want %q", cat, "cat")
+	}
+
+	dog, err := listReader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString(dog) failed: %v", err)
+	}
+	if string(dog) != "dog" {
+		t.Errorf("Second item = %q, want %q", dog, "dog")
+	}
+}
+
+func TestRLPReader_ReadList_Nested(t *testing.T) {
+	// [ "cat", [ "dog" ] ]
+	innerList := RLPEncodeList([][]byte{RLPEncodeString([]byte("dog"))})
+	outerList := RLPEncodeList([][]byte{
+		RLPEncodeString([]byte("cat")),
+		innerList,
+	})
+
+	reader := NewRLPReader(bytes.NewReader(outerList))
+
+	listReader, err := reader.ReadList()
+	if err != nil {
+		t.Fatalf("ReadList failed: %v", err)
+	}
+
+	cat, err := listReader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString(cat) failed: %v", err)
+	}
+	if string(cat) != "cat" {
+		t.Errorf("First item = %q, want %q", cat, "cat")
+	}
+
+	innerReader, err := listReader.ReadList()
+	if err != nil {
+		t.Fatalf("ReadList(inner) failed: %v", err)
+	}
+
+	dog, err := innerReader.ReadString()
+	if err != nil {
+		t.Fatalf("ReadString(dog) failed: %v", err)
+	}
+	if string(dog) != "dog" {
+		t.Errorf("Inner item = %q, want %q", dog, "dog")
+	}
+}
+
+func TestRLPReader_ReadList_Long(t *testing.T) {
+	// Create a list with payload > 55 bytes
+	items := make([][]byte, 20)
+	for i := range items {
+		items[i] = RLPEncodeString([]byte("hello"))
+	}
+	encoded := RLPEncodeList(items)
+
+	reader := NewRLPReader(bytes.NewReader(encoded))
+
+	listReader, err := reader.ReadList()
+	if err != nil {
+		t.Fatalf("ReadList failed: %v", err)
+	}
+
+	// Read all 20 items
+	for i := 0; i < 20; i++ {
+		item, err := listReader.ReadString()
+		if err != nil {
+			t.Fatalf("ReadString item %d failed: %v", i, err)
+		}
+		if string(item) != "hello" {
+			t.Errorf("Item %d = %q, want %q", i, item, "hello")
+		}
+	}
+}
+
+func TestRLPReader_ReadList_ErrorOnString(t *testing.T) {
+	// String prefix should error
+	input := []byte{0x83, 0x64, 0x6f, 0x67}
+	reader := NewRLPReader(bytes.NewReader(input))
+	_, err := reader.ReadList()
+	if err == nil {
+		t.Error("ReadList should fail on string prefix")
+	}
+}

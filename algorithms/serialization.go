@@ -25,12 +25,29 @@ import (
 // RLPEncode encodes a value to RLP format
 // value can be: []byte, string, []interface{} (for lists), or uint64
 func RLPEncode(value interface{}) ([]byte, error) {
-	// Handle different types:
-	// - []byte / string: encode as string
-	// - []interface{}: encode as list (recursively encode each item)
-	// - uint64: encode as big-endian bytes (no leading zeros)
-	// - nil: encode as empty string (0x80)
-	return nil, errors.New("not implemented")
+	switch v := value.(type) {
+	case []byte:
+		return RLPEncodeString(v), nil
+	case string:
+		return RLPEncodeString([]byte(v)), nil
+	case uint64:
+		return RLPEncodeUint64(v), nil
+	case []interface{}:
+		// Recursively encode each item, then encode as list
+		encodedItems := make([][]byte, len(v))
+		for i, item := range v {
+			encoded, err := RLPEncode(item)
+			if err != nil {
+				return nil, err
+			}
+			encodedItems[i] = encoded
+		}
+		return RLPEncodeList(encodedItems), nil
+	case nil:
+		return []byte{0x80}, nil // empty string
+	default:
+		return nil, errors.New("unsupported type for RLP encoding")
+	}
 }
 
 // RLPEncodeString encodes a byte slice as RLP string
@@ -211,20 +228,85 @@ func NewRLPReader(r io.Reader) *RLPReader {
 
 // ReadString reads the next RLP string
 func (r *RLPReader) ReadString() ([]byte, error) {
-	// TODO: Implement
-	return nil, errors.New("not implemented")
+	// Read prefix byte
+	prefix := make([]byte, 1)
+	if _, err := io.ReadFull(r.r, prefix); err != nil {
+		return nil, err
+	}
+	key := prefix[0]
+
+	// Single byte [0x00, 0x7f]
+	if key <= 0x7f {
+		return prefix, nil
+	}
+	// Empty string
+	if key == 0x80 {
+		return []byte{}, nil
+	}
+	// Short string [0x81, 0xb7]
+	if key <= 0xb7 {
+		dataLen := int(key - 0x80)
+		data := make([]byte, dataLen)
+		if _, err := io.ReadFull(r.r, data); err != nil {
+			return nil, err
+		}
+		return data, nil
+	}
+	// Long string [0xb8, 0xbf]
+	if key <= 0xbf {
+		numLenBytes := int(key - 0xb7)
+		lenBytes := make([]byte, numLenBytes)
+		if _, err := io.ReadFull(r.r, lenBytes); err != nil {
+			return nil, err
+		}
+		dataLen := decodeBigEndian(lenBytes)
+		data := make([]byte, dataLen)
+		if _, err := io.ReadFull(r.r, data); err != nil {
+			return nil, err
+		}
+		return data, nil
+	}
+	return nil, errors.New("expected string, got list prefix")
 }
 
 // ReadList reads the next RLP list, returning a reader for the list contents
 func (r *RLPReader) ReadList() (*RLPReader, error) {
-	// TODO: Implement
-	return nil, errors.New("not implemented")
+	// Read prefix byte
+	prefix := make([]byte, 1)
+	if _, err := io.ReadFull(r.r, prefix); err != nil {
+		return nil, err
+	}
+	key := prefix[0]
+
+	var payloadLen int
+
+	if key == 0xc0 {
+		// Empty list
+		payloadLen = 0
+	} else if key > 0xc0 && key <= 0xf7 {
+		// Short list [0xc1, 0xf7]
+		payloadLen = int(key - 0xc0)
+	} else if key > 0xf7 {
+		// Long list [0xf8, 0xff]
+		numLenBytes := int(key - 0xf7)
+		lenBytes := make([]byte, numLenBytes)
+		if _, err := io.ReadFull(r.r, lenBytes); err != nil {
+			return nil, err
+		}
+		payloadLen = decodeBigEndian(lenBytes)
+	} else {
+		return nil, errors.New("expected list, got string prefix")
+	}
+
+	// Return a reader limited to the list payload
+	return &RLPReader{r: io.LimitReader(r.r, int64(payloadLen))}, nil
 }
 
 // ------------------------------------------------------------
 // SSZ (Simple Serialize) - Ethereum 2.0 encoding
 // Used for: Beacon chain blocks, attestations, state
-// Spec: https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md
+// Spec: https://ethereum.org/developers/docs/data-structures-and-encoding/ssz/
+// 		 https://www.ssz.dev/overview
 // ------------------------------------------------------------
 
 // SSZ features:
@@ -421,8 +503,3 @@ func MeasureEncodingSize(data interface{}) (rlpSize, sszSize, jsonSize int) {
 //    - Encoded size (bandwidth)
 //    - Random access capability
 //    - Proof generation support
-//
-// 5. Resources:
-//    - RLP spec: https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
-//    - SSZ spec: https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md
-//    - go-ethereum RLP: https://github.com/ethereum/go-ethereum/tree/master/rlp
