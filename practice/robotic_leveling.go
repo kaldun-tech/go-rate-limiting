@@ -35,35 +35,66 @@ const (
 )
 
 // Solve returns the next command to execute given the current state.
+// Caller is responsible for checking whether the puzzle is already solved and in a valid state
 // Parameters:
 //   - clawPos: index of the stack the arm is currently above (0-indexed)
 //   - boxes: slice of integers representing the height of each stack
 //   - boxInClaw: true if the arm is currently holding a box
 //
-// Returns: one of "RIGHT", "LEFT", "PICK", or "PLACE"
+// Returns: one of "RIGHT", "LEFT", "PICK", or "PLACE", ""
+// The empty string indicates caller error due to either a solved puzzle or inconsistent state
+// O(n) for n length of boxes
 func Solve(clawPos int, boxes []int, boxInClaw bool) string {
-	// TODO: Implement
 	// Hints:
 	// - First, calculate the target height for each stack
 	//   totalBoxes / numStacks = base height
 	//   totalBoxes % numStacks = number of stacks that get +1 (from left)
-	// - Identify which stacks have too many boxes (sources)
-	// - Identify which stacks need more boxes (targets)
-	// - Strategy: move to a source, pick, move to a target, place
-	// - Consider tracking state between calls or computing fresh each time
+	targets := computeTargetHeights(boxes, boxInClaw)
+	// Identify which stack has too many boxes - source
+	source := findSource(boxes, targets)
+	// Identify which stack needs more boxes - destination
+	dest := findTarget(boxes, targets)
+
+	// Strategy: move to a source, pick, move to a target, place
+	if boxInClaw && 0 <= dest {
+		// Move to the destination and place
+		if clawPos == dest {
+			return Place
+		} else if clawPos < dest {
+			return Right
+		} else {
+			return Left
+		}
+	} else if !boxInClaw && 0 <= source {
+		// Move to the source and pick
+		if clawPos < source {
+			return Right
+		} else if clawPos == source {
+			return Pick
+		} else {
+			return Left
+		}
+	}
+	// Error: already solved or invalid state
 	return ""
 }
 
-// Helper: compute target heights for a leveled configuration
+// Helper: compute target heights for a leveled configuration and claw state
 // Returns a slice where targetHeights[i] is the desired height for stack i
-func computeTargetHeights(boxes []int) []int {
+// O(n) for n length of boxes
+func computeTargetHeights(boxes []int, boxInClaw bool) []int {
 	// Total boxes divided among stacks, extras go left to right
-	// Compute integer mean as lower bound and remainder
 	sum := 0
 	n := len(boxes)
 	for _, b := range boxes {
 		sum += b
 	}
+	// Add one if there is a box in the claw
+	if boxInClaw {
+		sum++
+	}
+
+	// Compute integer mean as lower bound and remainder
 	avg := sum / n
 	rem := sum % n
 
@@ -81,6 +112,7 @@ func computeTargetHeights(boxes []int) []int {
 
 // Helper: check if current configuration matches target
 // Assumes the inputs are of matched length
+// O(n) for n length of boxes
 func isLeveled(boxes []int, targets []int) bool {
 	for i, b := range boxes {
 		if b != targets[i] {
@@ -94,6 +126,7 @@ func isLeveled(boxes []int, targets []int) bool {
 
 // Helper: find the leftmost stack that has more boxes than target
 // Returns index of a stack with boxes[i] > targets[i], or -1 if none
+// O(n) for n length of boxes
 func findSource(boxes []int, targets []int) int {
 	for i, b := range boxes {
 		t := targets[i]
@@ -107,6 +140,7 @@ func findSource(boxes []int, targets []int) int {
 
 // Helper: find the leftmost stack that needs more boxes
 // Returns index of a stack with boxes[i] < targets[i], or -1 if none
+// O(n) for n length of boxes
 func findTarget(boxes []int, targets []int) int {
 	for i, b := range boxes {
 		t := targets[i]

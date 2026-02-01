@@ -6,21 +6,27 @@ import (
 
 func TestComputeTargetHeights(t *testing.T) {
 	tests := []struct {
-		name     string
-		boxes    []int
-		expected []int
+		name      string
+		boxes     []int
+		boxInClaw bool
+		expected  []int
 	}{
-		{"even distribution", []int{2, 2, 2}, []int{2, 2, 2}},
-		{"needs leveling", []int{4, 1, 1}, []int{2, 2, 2}},
-		{"with remainder", []int{3, 2, 2}, []int{3, 2, 2}}, // 7 boxes, 3 stacks -> [3,2,2]
-		{"two stacks even", []int{3, 3}, []int{3, 3}},
-		{"two stacks odd", []int{4, 1}, []int{3, 2}}, // 5 boxes, 2 stacks -> [3,2]
-		{"all on one", []int{6, 0, 0}, []int{2, 2, 2}},
+		{"even distribution", []int{2, 2, 2}, false, []int{2, 2, 2}},
+		{"even plus claw", []int{2, 2, 2}, true, []int{3, 2, 2}},
+		{"needs leveling", []int{4, 1, 1}, false, []int{2, 2, 2}},
+		{"with remainder", []int{3, 2, 2}, false, []int{3, 2, 2}},        // 7 boxes, 3 stacks -> [3,2,2]
+		{"claw changes remainder", []int{1, 1, 1}, true, []int{2, 1, 1}}, // 3->4 boxes, 4%3=1
+		{"two stacks even", []int{3, 3}, false, []int{3, 3}},
+		{"two stacks odd", []int{4, 1}, false, []int{3, 2}}, // 5 boxes, 2 stacks -> [3,2]
+		{"all on one", []int{6, 0, 0}, false, []int{2, 2, 2}},
+		{"eight stacks", []int{8, 0, 0, 0, 0, 0, 0, 0}, false, []int{1, 1, 1, 1, 1, 1, 1, 1}},
+		{"single box", []int{1, 0, 0}, false, []int{1, 0, 0}},
+		{"single box in claw", []int{0, 0, 0}, true, []int{1, 0, 0}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := computeTargetHeights(tc.boxes)
+			got := computeTargetHeights(tc.boxes, tc.boxInClaw)
 			if len(got) != len(tc.expected) {
 				t.Errorf("computeTargetHeights(%v) length = %d, want %d", tc.boxes, len(got), len(tc.expected))
 				return
@@ -123,12 +129,12 @@ func TestSolve_Simulation(t *testing.T) {
 			clawPos := tc.initialClaw
 			boxInClaw := false
 
-			targets := computeTargetHeights(tc.initialBoxes)
+			targets := computeTargetHeights(tc.initialBoxes, boxInClaw)
 			if targets == nil {
 				t.Skip("computeTargetHeights not implemented")
 			}
 
-			for turn := 0; turn < 200; turn++ {
+			for range 200 {
 				if isLeveled(boxes, targets) {
 					return // Success
 				}

@@ -23,6 +23,7 @@ import "math"
 // ClosestToZero returns the temperature closest to zero from the given slice.
 // If the slice is empty, returns 0.
 // If two temperatures are equally close, returns the positive one.
+// O(n) for n length of input ts
 func ClosestToZero(ts []float64) float64 {
 	// Hints:
 	// - Handle empty slice case first
@@ -39,6 +40,9 @@ func ClosestToZero(ts []float64) float64 {
 	for _, next := range ts {
 		absClosest := math.Abs(closestToZero)
 		absNext := math.Abs(next)
+		if absNext == 0 {
+			return 0
+		}
 		if absNext < absClosest || (absNext == absClosest && 0 < next && closestToZero < 0) {
 			// Update closest for closer absolute or equal positive next value
 			closestToZero = next
